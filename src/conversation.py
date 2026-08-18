@@ -1,8 +1,9 @@
-"""Transport-agnostic conversation logic shared by bot.py (polling) and server.py (webhook/n8n).
+"""Transport-agnostic conversation logic.
 
-Owns the small per-chat state machine (idle <-> awaiting-explanation) and formats
-replies as plain text. Callers just need to feed it (chat_id, text) and send the
-returned string back over whichever transport they're using.
+Owns the small per-session state machine (idle <-> awaiting-explanation) and
+formats replies as plain text. Callers feed it (session_id, text) and send the
+returned string back over whichever front end they're using — study.py is the
+terminal one, but nothing here knows or cares about the terminal.
 """
 
 from __future__ import annotations

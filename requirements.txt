@@ -1,9 +1,6 @@
-# Core — needed for the simple path (src/bot.py)
-requests>=2.31
-python-dotenv>=1.0
-
-# Optional — only needed if you use src/server.py (the n8n path)
-flask>=3.0
+# Core
+rich>=13.0            # colorized terminal output
+python-dotenv>=1.0    # loads .env
 
 # Dev — only needed to run tests/
 pytest>=8.0

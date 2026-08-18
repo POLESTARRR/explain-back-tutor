@@ -1,7 +1,8 @@
 # Sample Notes
 
-Three ready-made concepts to test the bot with before you load your own notes.
-Try `python src/load_notes.py sample_notes.md`, then in Telegram send `inflation`.
+Three ready-made concepts to test with before you load your own notes.
+Run `python src/load_notes.py sample_notes.md`, then `python src/study.py` and
+type `inflation`.
 
 ## Inflation
 
