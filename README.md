@@ -88,6 +88,15 @@ An object resists change in its state of motion...
 A `--subject` flag applies to concepts appearing before any `#` heading.
 Concepts with no subject at all are grouped as `uncategorized`.
 
+Keep your own notes in `notes/` — it's gitignored, so your material never
+gets committed if you fork or push this repo.
+
+**A note on note quality:** the grading is only ever as good as your notes,
+and it will tell you so. Feed it one-line definitions and it will correctly
+mark most of a good answer as "not covered by your notes" — which is the
+signal to go write better notes. Rich, explanatory notes produce genuinely
+useful grading.
+
 ### 3. Study
 ```
 python src/study.py
