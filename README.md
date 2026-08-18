@@ -21,11 +21,14 @@ themselves are thin.
   back right before you'd forget them
 - **Picks what to study next** — due reviews first, then a weighted mix of
   weak spots, reinforcement, and unexplored concepts
+- **Organizes by subject**, so you can scope a session to one of them
 - **Flags gaps in your notes** — when you say something true that your
   notes don't cover, that's a note to improve, not a mistake
 - **Summarizes each session** to a markdown log you can review later
 - **Shows a dashboard** of scores, coverage, and upcoming reviews
 - **Reminds you daily** via a native macOS notification
+- **Never loses your data** — atomic writes, and a corrupt file is
+  quarantined rather than crashing the app or being overwritten
 
 ## Why it's free
 
@@ -55,10 +58,35 @@ pip install -r requirements.txt
 cp .env.example .env          # then fill in the token above
 python src/load_notes.py sample_notes.md    # try the 3 sample concepts first
 ```
-Load your real notes the same way. Each concept starts with a
-`## Concept Name` heading; everything under it is the source text you'll be
-graded against. Add `--replace` to overwrite instead of merge. Loading
-notes for many subjects is just many files, or one big file.
+Load your real notes the same way:
+
+```
+python src/load_notes.py chemistry.md physics.md      # several files at once
+python src/load_notes.py notes.md --subject biology   # tag a whole file
+python src/load_notes.py notes.md --replace           # overwrite instead of merge
+```
+
+**Notes format** — `## Concept Name` starts a concept, and everything under
+it is the source text you'll be graded against. `# Subject Name` groups
+every concept beneath it, so one file can hold several subjects:
+
+```markdown
+# Chemistry
+
+## Covalent Bonding
+Atoms share electron pairs...
+
+## Acids and Bases
+A Brønsted acid is a proton donor...
+
+# Physics
+
+## Inertia
+An object resists change in its state of motion...
+```
+
+A `--subject` flag applies to concepts appearing before any `#` heading.
+Concepts with no subject at all are grouped as `uncategorized`.
 
 ### 3. Study
 ```
@@ -95,33 +123,47 @@ choose for you. Type your explanation, finish with a blank line:
 ╰──────────────────────────────────────────────────────────╯
 ```
 
-Commands: `/next`, `/due`, `/list`, `/weak`, `/stats`, `/help`, `/exit`.
-`/cancel` backs out mid-explanation. On exit you get a session summary and
-a saved log.
+Commands: `/next`, `/due`, `/list`, `/subjects`, `/focus`, `/weak`,
+`/stats`, `/help`, `/exit`. `/cancel` backs out mid-explanation. On exit
+you get a session summary and a saved log.
+
+**Focusing on one subject** — `/focus chemistry` scopes `/next`, `/due`,
+`/list`, `/weak`, and `/stats` to that subject for the rest of the session;
+`/focus` alone clears it. Or start focused:
+
+```
+python src/study.py --subject chemistry
+```
 
 ### One-shot / scriptable
 
 ```
-python src/study.py list      # all loaded concepts
-python src/study.py due       # what's due for review
-python src/study.py next      # what to study now, and why
-python src/study.py weak      # your lowest averages
-python src/study.py stats     # coverage and overall average
+python src/study.py list       # all loaded concepts, with subjects
+python src/study.py subjects   # subjects and their coverage
+python src/study.py due        # what's due for review
+python src/study.py next       # what to study now, and why
+python src/study.py weak       # your lowest averages
+python src/study.py stats      # coverage and overall average
 echo "my explanation" | python src/study.py explain inflation
 ```
 
-These exit with real status codes (0 ok, 1 failure, 2 usage error), so
-they compose in shell scripts, aliases, and cron jobs.
+Every command except `subjects` and `explain` takes `--subject S` to scope
+it; `weak` also takes `--limit N`. These exit with real status codes (0 ok,
+1 failure, 2 usage error), so they compose in shell scripts and cron jobs.
 
 ### Web dashboard
 
 ```
-python src/web.py       # then open http://127.0.0.1:5000
+python src/web.py               # then open http://127.0.0.1:5050
+python src/web.py --port 8080   # if that port is taken
 ```
 
-Read-only view of scores over time, per-concept history, coverage, and the
-review queue. Binds to localhost only — it is not reachable from your
-network. There's also a `/api/data` JSON endpoint if you want to build on it.
+Read-only view of scores over time, per-subject rollups, per-concept
+history, coverage, and the review queue. Binds to localhost only — it is
+not reachable from your network. There's also a `/api/data` JSON endpoint.
+
+(It defaults to port 5050 rather than 5000 because macOS AirPlay Receiver
+occupies 5000, which makes a dashboard on that port fail confusingly.)
 
 ### Daily reminders (macOS)
 
@@ -147,16 +189,35 @@ keep fumbling keeps coming back.
 does it fall back to a weighted mix — 60% weak concepts, 30% reinforcing
 strong ones, 10% something you've never tried.
 
+## Your data
+
+Everything lives in `data/` as plain JSON and markdown you can read, edit,
+back up, or delete:
+
+- `data/concepts.json` — your loaded notes
+- `data/progress.json` — score history and review schedule
+- `data/sessions/*.md` — one markdown log per study session
+
+Both JSON stores are written atomically (temp file + rename), so a crash or
+a full disk can't leave you with a half-written file. If a file is ever
+found corrupt anyway, it's moved aside as `*.corrupt-<timestamp>` and the
+app starts clean instead of crashing or overwriting it — your data is
+always recoverable by hand.
+
+Store formats have changed twice as features landed; both migrations run
+automatically on load, so older files keep working.
+
 ## Running the tests
 
 ```
 pytest -q
 ```
-142 tests cover the concept store, spaced-repetition scheduling, progress
-tracking and its v1→v2 migration, session summaries, the CLI's command
-routing and interactive loop, the web dashboard, the reminder, and the
+200 tests cover the concept store and its subject grouping, spaced-repetition
+scheduling, progress tracking, both store migrations, atomic writes and
+corruption recovery, session summaries, the CLI's argument parsing and
+interactive loop, subject scoping, the web dashboard, the reminder, and the
 grader's JSON parsing — all with the `claude -p` call mocked, so the suite
-runs in about a second with no network use and no draw on your
+runs in about half a second with no network use and no draw on your
 subscription. The grading pipeline was verified end-to-end against real
 `claude -p` calls during development.
 
@@ -166,16 +227,17 @@ subscription. The grading pipeline was verified end-to-end against real
 |---|---|
 | `src/study.py` | the terminal app — this is what you run |
 | `src/scheduler.py` | SM-2 spaced repetition + adaptive concept selection |
-| `src/progress.py` | score history and review state, with v1 migration |
+| `src/progress.py` | score history and review state |
 | `src/grader.py` | grades an explanation via `claude -p` |
-| `src/concepts.py` | loads and searches your notes |
+| `src/concepts.py` | loads/searches your notes, groups them by subject |
+| `src/storage.py` | atomic JSON writes and corruption recovery |
 | `src/session.py` | session recording and markdown summaries |
 | `src/conversation.py` | transport-agnostic conversation engine |
 | `src/load_notes.py` | notes loader |
 | `src/web.py` | local read-only dashboard |
 | `scheduling/remind.py` | macOS notification about what's due |
 | `scheduling/install_reminder.sh` | installs/removes the launchd agent |
-| `tests/` | 142 tests |
+| `tests/` | 200 tests |
 
 ## What makes this worth building (and not generic)
 

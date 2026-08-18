@@ -1,8 +1,4 @@
-# Sample Notes
-
-Three ready-made concepts to test with before you load your own notes.
-Run `python src/load_notes.py sample_notes.md`, then `python src/study.py` and
-type `inflation`.
+# Economics
 
 ## Inflation
 
@@ -21,6 +17,20 @@ the economy, not just one product getting more expensive. Hyperinflation is
 an extreme, out-of-control case, often above 50% a month, usually caused by a
 government printing money far faster than the economy's actual output grows.
 
+## Opportunity Cost
+
+Opportunity cost is the value of the next-best alternative you give up when
+you make a choice. It is not the sum of all foregone options — only the single
+most valuable one you didn't take. Every choice has one, including choices
+that involve no money: spending an hour studying has the opportunity cost of
+whatever you'd otherwise have done with that hour. The concept matters because
+the true cost of a decision is never just its price tag; it's the price plus
+what you forfeited. Economists use it to explain why "free" things aren't
+free, and why a business with a profitable factory might still be making a bad
+decision if an even more profitable use of that capital exists.
+
+# Biology
+
 ## Photosynthesis
 
 Photosynthesis is the process plants, algae, and some bacteria use to convert
@@ -36,6 +46,22 @@ doesn't directly need light, but depends on the products of the light
 reactions. Photosynthesis is the foundational energy input for nearly all
 food chains on Earth, and it's also the main reason atmospheric oxygen exists
 at the levels it does.
+
+## Natural Selection
+
+Natural selection is the mechanism by which populations evolve over
+generations. It requires three conditions: variation among individuals in a
+population, heritability of that variation, and differential reproductive
+success tied to it. Individuals whose inherited traits make them better suited
+to their environment tend to survive and reproduce more, so those traits become
+more common over generations. Crucially, natural selection acts on existing
+variation — it does not create traits on demand, and individuals do not adapt
+during their lifetime; populations change across generations. It is also not
+inherently progressive: "fitness" means reproductive success in a specific
+environment, so a trait that is advantageous in one environment can be harmful
+in another when conditions shift.
+
+# Computer Science
 
 ## TCP vs UDP
 
@@ -53,3 +79,17 @@ makes it faster and lower-overhead than TCP, which is why it's used for video
 calls, live streaming, and online gaming — a dropped or late packet is worse
 for the experience than a slightly imperfect one. In short: TCP trades speed
 for reliability; UDP trades reliability for speed.
+
+## Big-O Notation
+
+Big-O notation describes how an algorithm's running time or memory use grows
+as the input size grows, ignoring constant factors and lower-order terms. It
+describes an upper bound on growth rate, not actual speed: an O(n) algorithm
+is not necessarily faster than an O(n²) one for small inputs, because Big-O
+deliberately discards the constants that dominate at small scale. Common
+classes, from best to worst: O(1) constant, O(log n) logarithmic, O(n) linear,
+O(n log n), O(n²) quadratic, O(2ⁿ) exponential. The point of the notation is
+to compare how algorithms *scale* — an O(n²) algorithm that's fine for 100
+items may be unusable at 100,000. Big-O usually describes worst-case behavior
+unless stated otherwise; average and best cases can differ substantially, as
+with quicksort's O(n log n) average versus O(n²) worst case.

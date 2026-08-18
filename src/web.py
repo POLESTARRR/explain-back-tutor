@@ -4,11 +4,14 @@
 Read-only by design: studying happens in the terminal, this just visualizes it.
 Binds to localhost only; nothing is exposed to your network.
 
-    python src/web.py          # then open http://127.0.0.1:5000
+    python src/web.py              # then open http://127.0.0.1:5050
+    python src/web.py --port 8080  # if 5050 is taken
 """
 
 from __future__ import annotations
 
+import argparse
+import os
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -18,7 +21,7 @@ from flask import Flask, jsonify, render_template_string
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.concepts import ConceptStore  # noqa: E402
+from src.concepts import UNCATEGORIZED, ConceptStore  # noqa: E402
 from src.progress import ProgressStore  # noqa: E402
 from src.study import LOCAL_CHAT_ID  # noqa: E402
 
@@ -41,6 +44,7 @@ def build_dashboard_data() -> dict:
         state = states.get(name)
         per_concept.append({
             "concept": name,
+            "subject": concepts.subject_of(name) or UNCATEGORIZED,
             "average": averages.get(name),
             "attempts": len(history),
             "latest": history[-1]["score"] if history else None,
@@ -48,6 +52,18 @@ def build_dashboard_data() -> dict:
             "due": state.due if state else None,
             "interval_days": state.interval_days if state else 0,
             "ease": round(state.ease, 2) if state else None,
+        })
+
+    per_subject = []
+    for subject in concepts.subjects():
+        names = concepts.names(subject)
+        studied = [n for n in names if n in averages]
+        per_subject.append({
+            "subject": subject,
+            "concepts": len(names),
+            "studied": len(studied),
+            "average": (sum(averages[n] for n in studied) / len(studied)) if studied else None,
+            "due": len([c for c, _ in due if c in set(names)]),
         })
 
     # Daily average across all concepts, for the trend line.
@@ -69,6 +85,7 @@ def build_dashboard_data() -> dict:
             "overall_average": (sum(averages.values()) / len(averages)) if averages else None,
         },
         "concepts": per_concept,
+        "subjects": per_subject,
         "due": [{"concept": c, "days_overdue": d} for c, d in due],
         "trend": trend,
     }
@@ -150,6 +167,32 @@ TEMPLATE = """
     </div>
   </div>
 
+  {% if data.subjects|length > 1 %}
+  <h2>By subject</h2>
+  <div class="scroll"><table>
+    <tr>
+      <th>Subject</th><th class="num">Concepts</th><th class="num">Studied</th>
+      <th class="num">Average</th><th class="num">Due</th><th>&nbsp;</th>
+    </tr>
+    {% for s in data.subjects %}
+    <tr>
+      <td>{{ s.subject }}</td>
+      <td class="num">{{ s.concepts }}</td>
+      <td class="num">{{ s.studied }}/{{ s.concepts }}</td>
+      <td class="num {% if s.average %}{{ grade(s.average) }}{% endif %}">
+        {% if s.average %}{{ "%.1f"|format(s.average) }}{% else %}—{% endif %}
+      </td>
+      <td class="num">{{ s.due }}</td>
+      <td>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: {{ (s.studied / s.concepts * 100)|round|int }}%"></div>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
   <h2>Due for review</h2>
   {% if data.due %}
   <div class="scroll"><table>
@@ -168,12 +211,13 @@ TEMPLATE = """
   <h2>All concepts</h2>
   <div class="scroll"><table>
     <tr>
-      <th>Concept</th><th class="num">Average</th><th class="num">Attempts</th>
+      <th>Concept</th><th>Subject</th><th class="num">Average</th><th class="num">Attempts</th>
       <th>History</th><th>Next review</th>
     </tr>
     {% for c in data.concepts %}
     <tr>
       <td>{{ c.concept }}</td>
+      <td><span class="pill">{{ c.subject }}</span></td>
       <td class="num {% if c.average %}{{ grade(c.average) }}{% endif %}">
         {% if c.average %}{{ "%.1f"|format(c.average) }}{% else %}—{% endif %}
       </td>
@@ -213,8 +257,24 @@ TEMPLATE = """
 
 
 def main() -> int:
-    # localhost only — this is a personal dashboard, not a service.
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    parser = argparse.ArgumentParser(description="Local read-only study dashboard.")
+    # 5000 is avoided by default: macOS AirPlay Receiver listens there, which
+    # makes the dashboard appear to start and then serve nothing useful.
+    parser.add_argument(
+        "--port", "-p", type=int, default=int(os.environ.get("PORT", "5050")),
+        help="Port to serve on (default 5050, or $PORT)",
+    )
+    args = parser.parse_args()
+
+    url = f"http://127.0.0.1:{args.port}"
+    print(f"Explain-Back Tutor dashboard: {url}  (Ctrl+C to stop)")
+    try:
+        # localhost only — this is a personal dashboard, not a service.
+        app.run(host="127.0.0.1", port=args.port, debug=False)
+    except OSError as exc:
+        print(f"\nCould not start on port {args.port}: {exc}", file=sys.stderr)
+        print(f"Try a different one:  python src/web.py --port {args.port + 1}", file=sys.stderr)
+        return 1
     return 0
 
 

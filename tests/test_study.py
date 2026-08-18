@@ -47,14 +47,17 @@ def test_weak_command_after_a_score(stores, capsys):
     assert "4.0/10" in out
 
 
-def test_unknown_command_returns_usage_error(stores, capsys):
-    assert study.run(["bogus"]) == 2
-    assert "Unknown command" in capsys.readouterr().out
+def test_unknown_command_exits_with_usage_error(stores):
+    # argparse rejects unknown subcommands itself, exiting 2.
+    with pytest.raises(SystemExit) as exc:
+        study.run(["bogus"])
+    assert exc.value.code == 2
 
 
-def test_explain_without_concept_returns_usage_error(stores, capsys):
-    assert study.run(["explain"]) == 2
-    assert "Usage" in capsys.readouterr().out
+def test_explain_without_concept_exits_with_usage_error(stores):
+    with pytest.raises(SystemExit) as exc:
+        study.run(["explain"])
+    assert exc.value.code == 2
 
 
 def test_explain_grades_and_records(stores, monkeypatch, capsys):

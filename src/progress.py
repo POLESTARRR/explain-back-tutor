@@ -17,11 +17,11 @@ shape are migrated on load, so upgrading never loses history.
 
 from __future__ import annotations
 
-import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 from src.scheduler import ReviewState, due_concepts, review_state
+from src.storage import read_json, write_json
 
 DEFAULT_STORE_PATH = Path(__file__).resolve().parent.parent / "data" / "progress.json"
 
@@ -30,16 +30,13 @@ class ProgressStore:
     def __init__(self, path: Path | str = DEFAULT_STORE_PATH):
         self.path = Path(path)
         self._data: dict[str, dict[str, dict]] = {}
+        self.warning: str | None = None
         self._load()
 
     # ------------------------------------------------------------------ io
 
     def _load(self) -> None:
-        if not self.path.exists():
-            self._data = {}
-            return
-        with open(self.path, "r", encoding="utf-8") as f:
-            raw = json.load(f)
+        raw, self.warning = read_json(self.path)
         self._data = {
             session: {concept: self._migrate_entry(entry) for concept, entry in concepts.items()}
             for session, concepts in raw.items()
@@ -56,9 +53,7 @@ class ProgressStore:
         }
 
     def _save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self._data, f, indent=2, ensure_ascii=False)
+        write_json(self.path, self._data)
 
     def _entry(self, session_id: str | int, concept: str) -> dict:
         session = self._data.setdefault(str(session_id), {})

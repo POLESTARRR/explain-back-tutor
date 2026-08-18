@@ -104,3 +104,58 @@ def test_api_returns_json(client, stores):
     assert "totals" in payload
     assert "concepts" in payload
     assert payload["totals"]["loaded"] == 2
+
+
+# ----------------------------------------------------------------- subjects
+
+
+@pytest.fixture
+def subject_stores(tmp_path, monkeypatch):
+    concepts = ConceptStore(tmp_path / "concepts.json")
+    concepts.add("Acids", "Proton donors.", subject="Chemistry")
+    concepts.add("Bonding", "Shared electrons.", subject="Chemistry")
+    concepts.add("Inertia", "Resists change.", subject="Physics")
+    concepts.save()
+    progress = ProgressStore(tmp_path / "progress.json")
+    monkeypatch.setattr(web, "ConceptStore", lambda *a, **k: concepts)
+    monkeypatch.setattr(web, "ProgressStore", lambda *a, **k: progress)
+    return concepts, progress
+
+
+def test_concepts_carry_subject(subject_stores):
+    data = web.build_dashboard_data()
+    acids = next(c for c in data["concepts"] if c["concept"] == "acids")
+    assert acids["subject"] == "chemistry"
+
+
+def test_unsubjected_concept_reports_uncategorized(stores):
+    data = web.build_dashboard_data()
+    assert all(c["subject"] == "uncategorized" for c in data["concepts"])
+
+
+def test_subject_rollup(subject_stores):
+    _, progress = subject_stores
+    progress.record(web.LOCAL_CHAT_ID, "acids", 8, today=TODAY)
+
+    data = web.build_dashboard_data()
+    chemistry = next(s for s in data["subjects"] if s["subject"] == "chemistry")
+    assert chemistry["concepts"] == 2
+    assert chemistry["studied"] == 1
+    assert chemistry["average"] == 8.0
+
+    physics = next(s for s in data["subjects"] if s["subject"] == "physics")
+    assert physics["studied"] == 0
+    assert physics["average"] is None
+
+
+def test_subject_section_renders_when_multiple_subjects(subject_stores):
+    web.app.config["TESTING"] = True
+    body = web.app.test_client().get("/").get_data(as_text=True)
+    assert "By subject" in body
+    assert "chemistry" in body
+
+
+def test_subject_section_hidden_for_single_subject(stores):
+    web.app.config["TESTING"] = True
+    body = web.app.test_client().get("/").get_data(as_text=True)
+    assert "By subject" not in body
