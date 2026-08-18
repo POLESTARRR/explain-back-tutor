@@ -123,9 +123,12 @@ choose for you. Type your explanation, finish with a blank line:
 ╰──────────────────────────────────────────────────────────╯
 ```
 
-Commands: `/next`, `/due`, `/list`, `/subjects`, `/focus`, `/weak`,
-`/stats`, `/help`, `/exit`. `/cancel` backs out mid-explanation. On exit
-you get a session summary and a saved log.
+Commands: `/next`, `/review`, `/due`, `/list`, `/subjects`, `/focus`,
+`/history <concept>`, `/weak`, `/stats`, `/help`, `/exit`. `/cancel` backs
+out mid-explanation. On exit you get a session summary and a saved log.
+
+**`/review` is the daily workflow** — it drills straight through every
+concept that's due, one after another, and summarizes at the end.
 
 **Focusing on one subject** — `/focus chemistry` scopes `/next`, `/due`,
 `/list`, `/weak`, and `/stats` to that subject for the rest of the session;
@@ -138,18 +141,21 @@ python src/study.py --subject chemistry
 ### One-shot / scriptable
 
 ```
-python src/study.py list       # all loaded concepts, with subjects
-python src/study.py subjects   # subjects and their coverage
-python src/study.py due        # what's due for review
-python src/study.py next       # what to study now, and why
-python src/study.py weak       # your lowest averages
-python src/study.py stats      # coverage and overall average
+python src/study.py list                 # all loaded concepts, with subjects
+python src/study.py subjects             # subjects and their coverage
+python src/study.py due                  # what's due for review
+python src/study.py next                 # what to study now, and why
+python src/study.py review               # drill through everything due
+python src/study.py weak                 # your lowest averages
+python src/study.py stats                # coverage and overall average
+python src/study.py history inflation    # every attempt at one concept
 echo "my explanation" | python src/study.py explain inflation
 ```
 
-Every command except `subjects` and `explain` takes `--subject S` to scope
-it; `weak` also takes `--limit N`. These exit with real status codes (0 ok,
-1 failure, 2 usage error), so they compose in shell scripts and cron jobs.
+Most commands take `--subject S` to scope them; `weak` also takes
+`--limit N`. These exit with real status codes (0 ok, 1 failure, 2 usage
+error), so they compose in shell scripts and cron jobs. `--help` works on
+the top level and on every subcommand.
 
 ### Web dashboard
 
@@ -204,22 +210,30 @@ found corrupt anyway, it's moved aside as `*.corrupt-<timestamp>` and the
 app starts clean instead of crashing or overwriting it — your data is
 always recoverable by hand.
 
+Grading failures are retried automatically (they're usually a timeout or
+the model returning prose instead of JSON). If every retry fails, your
+explanation is written to `data/unsent/` rather than lost, so a long answer
+never disappears because of a hiccup.
+
 Store formats have changed twice as features landed; both migrations run
 automatically on load, so older files keep working.
 
 ## Running the tests
 
 ```
-pytest -q
+pytest
 ```
-200 tests cover the concept store and its subject grouping, spaced-repetition
+225 tests cover the concept store and its subject grouping, spaced-repetition
 scheduling, progress tracking, both store migrations, atomic writes and
-corruption recovery, session summaries, the CLI's argument parsing and
-interactive loop, subject scoping, the web dashboard, the reminder, and the
-grader's JSON parsing — all with the `claude -p` call mocked, so the suite
-runs in about half a second with no network use and no draw on your
-subscription. The grading pipeline was verified end-to-end against real
-`claude -p` calls during development.
+corruption recovery, grader retries and explanation preservation, session
+summaries, the review drill, per-concept history, the CLI's argument parsing
+and interactive loop, subject scoping, the web dashboard, and the reminder —
+all with the `claude -p` call mocked, so the suite runs in well under a
+second with no network use and no draw on your subscription. The grading
+pipeline was verified end-to-end against real `claude -p` calls during
+development.
+
+CI runs the suite on Python 3.10–3.13 on every push.
 
 ## Files
 

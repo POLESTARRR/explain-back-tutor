@@ -64,7 +64,7 @@ def test_explain_grades_and_records(stores, monkeypatch, capsys):
     _, progress = stores
     monkeypatch.setattr(
         "src.grader.grade_explanation",
-        lambda concept, notes, explanation: {
+        lambda concept, notes, explanation, **kwargs: {
             "score": 7.0,
             "correct": ["core idea"],
             "vague": [],
@@ -94,7 +94,7 @@ def test_explain_multiword_concept_joins_args(stores, monkeypatch):
     concepts.add("tcp vs udp", "TCP is reliable, UDP is fast.")
     captured = {}
 
-    def fake_grade(concept, notes, explanation):
+    def fake_grade(concept, notes, explanation, **kwargs):
         captured["concept"] = concept
         return {"score": 5.0, "correct": [], "vague": [], "wrong_or_missing": [], "summary": ""}
 
@@ -109,7 +109,7 @@ def test_explain_multiword_concept_joins_args(stores, monkeypatch):
 def test_grading_failure_surfaces_error_and_records_nothing(stores, monkeypatch, capsys):
     _, progress = stores
 
-    def boom(concept, notes, explanation):
+    def boom(concept, notes, explanation, **kwargs):
         raise GradingError("claude exploded")
 
     monkeypatch.setattr("src.grader.grade_explanation", boom)
@@ -167,7 +167,7 @@ def test_interactive_full_explanation_flow(stores, monkeypatch, capsys):
     _, progress = stores
     monkeypatch.setattr(
         "src.grader.grade_explanation",
-        lambda c, n, e: {
+        lambda c, n, e, **kwargs: {
             "score": 9.0,
             "correct": ["nailed it"],
             "vague": [],
@@ -202,3 +202,45 @@ def test_read_multiline_explanation_skips_leading_blanks(monkeypatch):
     replies = iter(["", "", "actual content", ""])
     monkeypatch.setattr("builtins.input", lambda *a: next(replies))
     assert study.read_multiline_explanation("inflation") == "actual content"
+
+
+# ------------------------------------------------- explanation preservation
+
+
+def test_failed_grading_saves_the_explanation(stores, monkeypatch, tmp_path, capsys):
+    """A transient failure must never cost the user what they typed."""
+    saved = {}
+
+    def fake_save(concept, explanation):
+        saved["concept"] = concept
+        saved["explanation"] = explanation
+        return tmp_path / "saved.txt"
+
+    def boom(concept, notes, explanation, **kwargs):
+        raise GradingError("claude exploded")
+
+    monkeypatch.setattr("src.grader.grade_explanation", boom)
+    monkeypatch.setattr(study, "save_failed_explanation", fake_save)
+    monkeypatch.setattr(study.sys.stdin, "isatty", lambda: False)
+    monkeypatch.setattr(study.sys.stdin, "read", lambda: "a long careful explanation")
+
+    assert study.run(["explain", "inflation"]) == 1
+    assert saved["explanation"] == "a long careful explanation"
+    assert "saved to" in capsys.readouterr().out
+
+
+def test_save_failed_explanation_writes_a_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(study, "__file__", str(tmp_path / "src" / "study.py"))
+    path = study.save_failed_explanation("TCP vs UDP", "my explanation")
+    assert path is not None
+    assert path.read_text() == "my explanation"
+    assert "tcp-vs-udp" in path.name
+
+
+def test_save_failed_explanation_survives_unwritable_location(monkeypatch):
+    def deny(*args, **kwargs):
+        raise OSError("read-only filesystem")
+
+    monkeypatch.setattr(study.Path, "mkdir", deny)
+    # Returns None rather than raising — the grading error is the real story.
+    assert study.save_failed_explanation("inflation", "text") is None

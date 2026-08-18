@@ -18,7 +18,9 @@ One-shot (scriptable — pipe it, alias it, or call it from cron/launchd):
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -256,13 +258,21 @@ def grade_one(
         report_unknown_concept(concepts, concept)
         return 1
 
+    def note_retry(attempt: int, error: GradingError) -> None:
+        console.print(f"[dim]Grading hiccup ({error}) — retrying, attempt {attempt + 1}...[/dim]")
+
     with console.status("[cyan]Grading your explanation...[/cyan]"):
         try:
             from src.grader import grade_explanation
 
-            result = grade_explanation(concept, notes, explanation)
+            result = grade_explanation(concept, notes, explanation, on_retry=note_retry)
         except GradingError as exc:
             console.print(f"[red]Grading failed:[/red] {exc}")
+            # Never make the user retype a long explanation because of a
+            # transient failure — hand it back so they can retry or keep it.
+            saved = save_failed_explanation(concept, explanation)
+            if saved:
+                console.print(f"[dim]Your explanation was saved to {saved}[/dim]")
             return 1
 
     key = concept.strip().lower()
@@ -271,6 +281,21 @@ def grade_one(
     if session is not None:
         session.record(key, result, next_due=state.due)
     return 0
+
+
+def save_failed_explanation(concept: str, explanation: str) -> Path | None:
+    """Persist an explanation whose grading failed, so nothing typed is ever lost."""
+    try:
+        directory = Path(__file__).resolve().parent.parent / "data" / "unsent"
+        directory.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        safe = re.sub(r"[^a-z0-9]+", "-", concept.lower()).strip("-") or "concept"
+        path = directory / f"{stamp}_{safe}.txt"
+        path.write_text(explanation, encoding="utf-8")
+        return path
+    except OSError:
+        # Saving is a courtesy; failing to save must not mask the grading error.
+        return None
 
 
 def report_unknown_concept(concepts: ConceptStore, name: str) -> None:
@@ -308,6 +333,94 @@ def read_multiline_explanation(concept: str) -> str | None:
     return text or None
 
 
+def render_history(concepts: ConceptStore, progress: ProgressStore, concept: str) -> int:
+    """Show every attempt at one concept, oldest first."""
+    if not concepts.exists(concept):
+        report_unknown_concept(concepts, concept)
+        return 1
+
+    key = concept.strip().lower()
+    attempts = progress.history(LOCAL_CHAT_ID, key)
+    if not attempts:
+        console.print(f"[yellow]No attempts yet for \"{key}\".[/yellow]")
+        return 0
+
+    state = progress.review_state(LOCAL_CHAT_ID, key)
+    table = Table(title=f"History · {key}", border_style="cyan")
+    table.add_column("#", justify="right")
+    table.add_column("When")
+    table.add_column("Score", justify="right")
+    table.add_column("Change", justify="right")
+
+    previous: float | None = None
+    for i, attempt in enumerate(attempts, start=1):
+        score = attempt["score"]
+        if previous is None:
+            delta = "[dim]—[/dim]"
+        elif score > previous:
+            delta = f"[green]+{score - previous:.0f}[/green]"
+        elif score < previous:
+            delta = f"[red]{score - previous:.0f}[/red]"
+        else:
+            delta = "[dim]0[/dim]"
+        table.add_row(
+            str(i),
+            attempt["ts"][:16].replace("T", " "),
+            f"[{score_style(score)}]{score:.0f}/10[/{score_style(score)}]",
+            delta,
+        )
+        previous = score
+
+    console.print(table)
+    average = sum(a["score"] for a in attempts) / len(attempts)
+    footer = f"Average {average:.1f}/10 over {len(attempts)} attempt(s)."
+    if state.due:
+        footer += f"  Next review {state.due}."
+    console.print(f"[dim]{footer}[/dim]")
+    return 0
+
+
+def review_session(
+    concepts: ConceptStore,
+    progress: ProgressStore,
+    subject: str | None = None,
+    session: StudySession | None = None,
+) -> int:
+    """Drill straight through everything due, one concept after another."""
+    allowed = set(concepts.names(subject))
+    queue = [c for c, _ in progress.due(LOCAL_CHAT_ID) if c in allowed]
+
+    if not queue:
+        console.print(
+            f"[green]Nothing due for review{scope_label(subject)}.[/green] "
+            "[dim]Use `next` to study something anyway.[/dim]"
+        )
+        return 0
+
+    owned_session = session is None
+    session = session or StudySession()
+    console.print(
+        Panel(
+            f"{len(queue)} concept(s) due{scope_label(subject)}.\n"
+            "[dim]/skip moves on, /cancel ends the review.[/dim]",
+            title="Review",
+            border_style="cyan",
+        )
+    )
+
+    for index, concept in enumerate(queue, start=1):
+        console.print(f"\n[dim]— {index} of {len(queue)} —[/dim]")
+        explanation = read_multiline_explanation(concept)
+        if explanation is None:
+            console.print("[dim]Review ended early.[/dim]")
+            break
+        grade_one(concepts, progress, concept, explanation, session)
+
+    if owned_session:
+        render_session_summary(session)
+    return 0
+
+
 def render_session_summary(session: StudySession) -> None:
     if not session.attempts:
         return
@@ -335,14 +448,16 @@ def render_session_summary(session: StudySession) -> None:
 
 
 HELP_LINES = (
-    "/next            pick something to study\n"
-    "/due             what's due for review\n"
-    "/list            all concepts in scope\n"
-    "/subjects        subjects and their coverage\n"
-    "/focus <subject> scope to one subject (/focus alone clears it)\n"
-    "/weak            your lowest averages\n"
-    "/stats           coverage and overall average\n"
-    "/exit            finish and save a session log"
+    "/next             pick something to study\n"
+    "/review           drill through everything due, one by one\n"
+    "/due              what's due for review\n"
+    "/list             all concepts in scope\n"
+    "/subjects         subjects and their coverage\n"
+    "/focus <subject>  scope to one subject (/focus alone clears it)\n"
+    "/history <name>   your attempts at one concept\n"
+    "/weak             your lowest averages\n"
+    "/stats            coverage and overall average\n"
+    "/exit             finish and save a session log"
 )
 
 
@@ -418,6 +533,13 @@ def interactive(concepts: ConceptStore, progress: ProgressStore, subject: str | 
                 picked = suggest_next(concepts, progress, focus)
                 if picked:
                     study(picked)
+            elif command == "/review":
+                review_session(concepts, progress, focus, session)
+            elif command == "/history":
+                if argument:
+                    render_history(concepts, progress, argument)
+                else:
+                    console.print("[yellow]Usage:[/yellow] /history <concept>")
             else:
                 console.print(
                     f"[yellow]Unknown command:[/yellow] {command}  [dim](/help for the list)[/dim]"
@@ -448,6 +570,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("list", "List concepts"),
         ("due", "Show concepts due for review"),
         ("next", "Suggest what to study now"),
+        ("review", "Drill through everything due, one by one"),
         ("stats", "Show coverage and averages"),
     ):
         p = sub.add_parser(name, help=help_text)
@@ -461,6 +584,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     explain = sub.add_parser("explain", help="Grade an explanation (read from stdin)")
     explain.add_argument("concept", nargs="+", help="Concept name")
+
+    history = sub.add_parser("history", help="Show your attempts at one concept")
+    history.add_argument("concept", nargs="+", help="Concept name")
 
     return parser
 
@@ -502,6 +628,10 @@ def run(argv: list[str]) -> int:
         return 0
     if command == "next":
         return 0 if suggest_next(concepts, progress, subject) else 1
+    if command == "review":
+        return review_session(concepts, progress, subject)
+    if command == "history":
+        return render_history(concepts, progress, " ".join(args.concept))
     if command == "explain":
         concept = " ".join(args.concept)
         # Validate before asking for an explanation, so a typo doesn't cost the

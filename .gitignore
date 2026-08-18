@@ -5,7 +5,9 @@ __pycache__/
 data/concepts.json
 data/progress.json
 data/sessions/
+data/unsent/
 data/reminder.log
+data/*.corrupt-*
 .dist/
 venv/
 .venv/

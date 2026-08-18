@@ -11,9 +11,13 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import time
+from typing import Callable
 
 CLAUDE_BIN = "claude"
 GRADE_TIMEOUT_SECONDS = 90
+GRADE_ATTEMPTS = 3           # total tries, including the first
+RETRY_BACKOFF_SECONDS = 2    # multiplied by the attempt number
 
 GRADING_PROMPT_TEMPLATE = """You are a strict but fair study grader using the Feynman technique. \
 A student is trying to prove they understand a concept by explaining it in their own words. \
@@ -55,7 +59,16 @@ Output raw JSON only."""
 
 
 class GradingError(RuntimeError):
-    pass
+    """A grading attempt failed.
+
+    `transient` marks failures worth retrying (a timeout, a hiccup in the CLI, a
+    malformed reply) as opposed to ones that will fail identically every time
+    (the `claude` binary not being installed).
+    """
+
+    def __init__(self, message: str, transient: bool = True):
+        super().__init__(message)
+        self.transient = transient
 
 
 def _extract_json(raw: str) -> dict:
@@ -93,12 +106,8 @@ def _validate(result: dict) -> dict:
     }
 
 
-def grade_explanation(concept: str, notes: str, explanation: str) -> dict:
-    """Runs `claude -p` to grade `explanation` against `notes`. Returns a validated dict.
-
-    Raises GradingError on any failure (bad JSON, non-zero exit, timeout) so callers
-    can decide how to surface it to the user instead of silently mis-scoring them.
-    """
+def _grade_once(concept: str, notes: str, explanation: str) -> dict:
+    """One `claude -p` grading attempt. Raises GradingError on any failure."""
     prompt = GRADING_PROMPT_TEMPLATE.format(concept=concept, notes=notes, explanation=explanation)
     try:
         proc = subprocess.run(
@@ -108,8 +117,10 @@ def grade_explanation(concept: str, notes: str, explanation: str) -> dict:
             timeout=GRADE_TIMEOUT_SECONDS,
         )
     except FileNotFoundError as exc:
+        # Retrying cannot fix a missing binary.
         raise GradingError(
-            "`claude` CLI not found on PATH. Install Claude Code and run `claude setup-token`."
+            "`claude` CLI not found on PATH. Install Claude Code and run `claude setup-token`.",
+            transient=False,
         ) from exc
     except subprocess.TimeoutExpired as exc:
         raise GradingError(f"Grading timed out after {GRADE_TIMEOUT_SECONDS}s.") from exc
@@ -117,5 +128,36 @@ def grade_explanation(concept: str, notes: str, explanation: str) -> dict:
     if proc.returncode != 0:
         raise GradingError(f"`claude -p` exited {proc.returncode}: {proc.stderr.strip()[:500]}")
 
-    parsed = _extract_json(proc.stdout)
-    return _validate(parsed)
+    return _validate(_extract_json(proc.stdout))
+
+
+def grade_explanation(
+    concept: str,
+    notes: str,
+    explanation: str,
+    attempts: int = GRADE_ATTEMPTS,
+    on_retry: Callable[[int, GradingError], None] | None = None,
+) -> dict:
+    """Grade `explanation` against `notes`, retrying transient failures.
+
+    The model occasionally returns prose instead of JSON, and the CLI can time
+    out under load. Both are worth one more try before making the user retype a
+    long explanation. `on_retry(attempt_number, error)` is called before each
+    retry so a UI can say what's happening.
+
+    Raises GradingError once retries are exhausted, so callers decide how to
+    surface it rather than silently mis-scoring the user.
+    """
+    last_error: GradingError | None = None
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            return _grade_once(concept, notes, explanation)
+        except GradingError as exc:
+            last_error = exc
+            if not exc.transient or attempt >= attempts:
+                raise
+            if on_retry:
+                on_retry(attempt, exc)
+            time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+    raise last_error  # unreachable; retained so the contract is explicit
