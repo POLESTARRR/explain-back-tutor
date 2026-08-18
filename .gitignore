@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 data/concepts.json
 data/progress.json
+data/sessions/
+data/reminder.log
 .dist/
 venv/
 .venv/

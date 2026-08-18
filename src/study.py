@@ -4,9 +4,12 @@
 Interactive:
     python src/study.py
 
-One-shot (scriptable — pipe it, alias it, or call it from cron):
+One-shot (scriptable — pipe it, alias it, or call it from cron/launchd):
     python src/study.py list
     python src/study.py weak
+    python src/study.py due
+    python src/study.py next
+    python src/study.py stats
     python src/study.py explain <concept>
 """
 
@@ -26,12 +29,21 @@ from src.concepts import ConceptStore  # noqa: E402
 from src.conversation import ConversationManager  # noqa: E402
 from src.grader import GradingError  # noqa: E402
 from src.progress import ProgressStore  # noqa: E402
+from src.scheduler import pick_next  # noqa: E402
+from src.session import StudySession  # noqa: E402
 
-# Progress is keyed by "chat id" in the shared engine; the terminal is one fixed
-# identity so scores persist across sessions.
+# Progress is keyed by "session id" in the shared engine; the terminal is one
+# fixed identity so scores persist across runs.
 LOCAL_CHAT_ID = "local"
 
 EXIT_COMMANDS = {"/exit", "/quit", "exit", "quit"}
+
+REASON_LABELS = {
+    "due": "due for review",
+    "weak": "one of your weak spots",
+    "strong": "reinforcing a strength",
+    "new": "you haven't tried this one yet",
+}
 
 console = Console()
 
@@ -44,7 +56,7 @@ def score_style(score: float) -> str:
     return "red"
 
 
-def render_feedback(concept: str, result: dict) -> None:
+def render_feedback(concept: str, result: dict, next_due: str | None = None) -> None:
     """Print a graded result as a colorized panel."""
     style = score_style(result["score"])
     body = Text()
@@ -62,6 +74,11 @@ def render_feedback(concept: str, result: dict) -> None:
     section("Correct", result["correct"], "green")
     section("Vague", result["vague"], "yellow")
     section("Wrong / missing", result["wrong_or_missing"], "red")
+    # Not a mistake by you — a hole in your source material.
+    section("Not covered by your notes", result.get("notes_gaps", []), "cyan")
+
+    if next_due:
+        body.append(f"\nNext review: {next_due}\n", style="dim")
 
     console.print(
         Panel(
@@ -97,7 +114,70 @@ def render_weak(progress: ProgressStore) -> None:
     console.print(table)
 
 
-def grade_one(concepts: ConceptStore, progress: ProgressStore, concept: str, explanation: str) -> int:
+def render_due(progress: ProgressStore) -> None:
+    rows = progress.due(LOCAL_CHAT_ID)
+    if not rows:
+        console.print("[green]Nothing due for review.[/green] [dim]Try `next` for something to study.[/dim]")
+        return
+    table = Table(title=f"Due for review ({len(rows)})", border_style="cyan")
+    table.add_column("Concept")
+    table.add_column("Overdue", justify="right")
+    for concept, days_overdue in rows:
+        label = "today" if days_overdue <= 0 else f"{days_overdue}d"
+        table.add_row(concept, label)
+    console.print(table)
+
+
+def render_stats(concepts: ConceptStore, progress: ProgressStore) -> None:
+    averages = progress.averages(LOCAL_CHAT_ID)
+    total_attempts = progress.total_attempts(LOCAL_CHAT_ID)
+    studied = len(averages)
+    loaded = len(concepts)
+    due_now = len(progress.due(LOCAL_CHAT_ID))
+
+    body = Text()
+    body.append(f"Concepts loaded:   {loaded}\n")
+    body.append(f"Concepts studied:  {studied}")
+    if loaded:
+        body.append(f"  ({studied / loaded * 100:.0f}% coverage)")
+    body.append("\n")
+    body.append(f"Total attempts:    {total_attempts}\n")
+    body.append(f"Due for review:    {due_now}\n")
+    if averages:
+        overall = sum(averages.values()) / len(averages)
+        body.append("Overall average:   ", style="")
+        body.append(f"{overall:.1f}/10\n", style=score_style(overall))
+    console.print(Panel(body, title="[bold]Your stats[/bold]", border_style="cyan"))
+
+
+def suggest_next(concepts: ConceptStore, progress: ProgressStore) -> str | None:
+    """Pick and announce the next concept to study. Returns the concept name."""
+    choice = pick_next(
+        concepts.names(),
+        progress.averages(LOCAL_CHAT_ID),
+        progress.review_states(LOCAL_CHAT_ID),
+    )
+    if choice is None:
+        console.print("[yellow]No concepts loaded.[/yellow] Run: python src/load_notes.py <notes.md>")
+        return None
+    concept, reason = choice
+    console.print(
+        Panel(
+            f"[bold]{concept}[/bold]\n[dim]{REASON_LABELS.get(reason, reason)}[/dim]",
+            title="Next up",
+            border_style="cyan",
+        )
+    )
+    return concept
+
+
+def grade_one(
+    concepts: ConceptStore,
+    progress: ProgressStore,
+    concept: str,
+    explanation: str,
+    session: StudySession | None = None,
+) -> int:
     """Grade a single explanation and render it. Returns a process exit code."""
     notes = concepts.get(concept)
     if notes is None:
@@ -116,8 +196,11 @@ def grade_one(concepts: ConceptStore, progress: ProgressStore, concept: str, exp
             console.print(f"[red]Grading failed:[/red] {exc}")
             return 1
 
-    progress.record(LOCAL_CHAT_ID, concept.strip().lower(), result["score"])
-    render_feedback(concept, result)
+    key = concept.strip().lower()
+    state = progress.record(LOCAL_CHAT_ID, key, result["score"])
+    render_feedback(concept, result, next_due=state.due)
+    if session is not None:
+        session.record(key, result, next_due=state.due)
     return 0
 
 
@@ -147,40 +230,88 @@ def read_multiline_explanation(concept: str) -> str | None:
     return text or None
 
 
+def render_session_summary(session: StudySession) -> None:
+    """End-of-session recap, plus the saved log path."""
+    if not session.attempts:
+        return
+    body = Text()
+    body.append(f"Concepts explained: {session.count}\n")
+    if session.average is not None:
+        body.append("Average score:      ")
+        body.append(f"{session.average:.1f}/10\n", style=score_style(session.average))
+    body.append(f"Time studying:      {session.duration_minutes():.0f} min\n")
+
+    gaps = session.all_notes_gaps()
+    if gaps:
+        body.append(f"\nYour notes may be missing {len(gaps)} thing(s) you mentioned:\n", style="cyan")
+        for concept, gap in gaps[:5]:
+            body.append(f"  • [{concept}] {gap}\n", style="cyan")
+
+    path = session.save()
+    if path:
+        body.append(f"\nSession log: {path}\n", style="dim")
+
+    console.print(Panel(body, title="[bold]Session summary[/bold]", border_style="cyan"))
+
+
 def interactive(concepts: ConceptStore, progress: ProgressStore) -> int:
     console.print(
         Panel(
             "[bold]Explain-Back Tutor[/bold]\n"
             "Type a concept name to be graded on it.\n"
-            "[dim]/list  /weak  /help  /exit[/dim]",
+            "[dim]/next  /due  /list  /weak  /stats  /help  /exit[/dim]",
             border_style="cyan",
         )
     )
     convo = ConversationManager(concepts, progress)  # used for /help text only
+    session = StudySession()
+
+    def finish() -> int:
+        render_session_summary(session)
+        console.print("[dim]Bye.[/dim]")
+        return 0
 
     while True:
         try:
             entry = input("\n> ").strip()
         except (EOFError, KeyboardInterrupt):
-            console.print("\n[dim]Bye.[/dim]")
-            return 0
+            console.print()
+            return finish()
 
         if not entry:
             continue
         if entry.lower() in EXIT_COMMANDS:
-            console.print("[dim]Bye.[/dim]")
-            return 0
+            return finish()
         if entry == "/list":
             render_concepts(concepts)
             continue
         if entry == "/weak":
             render_weak(progress)
             continue
+        if entry == "/due":
+            render_due(progress)
+            continue
+        if entry == "/stats":
+            render_stats(concepts, progress)
+            continue
         if entry == "/help":
             console.print(convo.handle_message(LOCAL_CHAT_ID, "/help"))
             continue
+        if entry == "/next":
+            picked = suggest_next(concepts, progress)
+            if picked is None:
+                continue
+            explanation = read_multiline_explanation(picked)
+            if explanation is None:
+                console.print("[dim]Skipped.[/dim]")
+                continue
+            grade_one(concepts, progress, picked, explanation, session)
+            continue
         if entry.startswith("/"):
-            console.print(f"[yellow]Unknown command:[/yellow] {entry}  [dim](/list /weak /help /exit)[/dim]")
+            console.print(
+                f"[yellow]Unknown command:[/yellow] {entry}  "
+                "[dim](/next /due /list /weak /stats /help /exit)[/dim]"
+            )
             continue
 
         if not concepts.exists(entry):
@@ -196,7 +327,7 @@ def interactive(concepts: ConceptStore, progress: ProgressStore) -> int:
         if explanation is None:
             console.print("[dim]Cancelled.[/dim]")
             continue
-        grade_one(concepts, progress, entry, explanation)
+        grade_one(concepts, progress, entry, explanation, session)
 
 
 def run(argv: list[str]) -> int:
@@ -215,6 +346,14 @@ def run(argv: list[str]) -> int:
     if command == "weak":
         render_weak(progress)
         return 0
+    if command == "due":
+        render_due(progress)
+        return 0
+    if command == "stats":
+        render_stats(concepts, progress)
+        return 0
+    if command == "next":
+        return 0 if suggest_next(concepts, progress) else 1
     if command == "explain":
         if not args:
             console.print("[red]Usage:[/red] study.py explain <concept>  [dim](explanation on stdin)[/dim]")
@@ -236,7 +375,10 @@ def run(argv: list[str]) -> int:
             return 2
         return grade_one(concepts, progress, concept, explanation)
 
-    console.print(f"[red]Unknown command:[/red] {command}  [dim](list, weak, explain)[/dim]")
+    console.print(
+        f"[red]Unknown command:[/red] {command}  "
+        "[dim](list, weak, due, next, stats, explain)[/dim]"
+    )
     return 2
 
 

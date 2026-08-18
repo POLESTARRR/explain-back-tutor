@@ -26,7 +26,19 @@ def test_extract_json_raises_on_garbage():
 
 def test_validate_fills_defaults():
     result = _validate({"score": 8})
-    assert result == {"score": 8.0, "correct": [], "vague": [], "wrong_or_missing": [], "summary": ""}
+    assert result == {
+        "score": 8.0,
+        "correct": [],
+        "vague": [],
+        "wrong_or_missing": [],
+        "notes_gaps": [],
+        "summary": "",
+    }
+
+
+def test_validate_preserves_notes_gaps():
+    result = _validate({"score": 8, "notes_gaps": ["notes don't mention hyperinflation"]})
+    assert result["notes_gaps"] == ["notes don't mention hyperinflation"]
 
 
 def test_validate_clamps_score_range():

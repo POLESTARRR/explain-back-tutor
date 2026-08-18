@@ -38,13 +38,20 @@ no prose outside the JSON) with this exact shape:
   "correct": ["point the student got right", ...],
   "vague": ["point the student gestured at but didn't clearly nail down", ...],
   "wrong_or_missing": ["point that is wrong, or an important point from the notes the student left out", ...],
+  "notes_gaps": ["claim the student made that is plausible and relevant but that the notes simply don't cover", ...],
   "summary": "one or two sentence overall verdict, direct and specific"
 }}
 
 Scoring guide: 9-10 = explained fully and precisely in their own words. 6-8 = core idea right, \
 missing nuance or minor gaps. 3-5 = partial/vague understanding, several gaps. 0-2 = mostly wrong \
 or a restatement of jargon without real explanation. Empty lists are fine when there's nothing to \
-report for that category. Output raw JSON only."""
+report for that category.
+
+Keep "wrong_or_missing" and "notes_gaps" strictly distinct. Something the notes contradict, or an \
+important point the notes make that the student omitted, is wrong_or_missing and should cost them \
+score. Something the student asserted that the notes are simply silent on is a notes_gap: it means \
+their notes may be incomplete, NOT that the student was wrong, so it must not reduce the score. \
+Output raw JSON only."""
 
 
 class GradingError(RuntimeError):
@@ -81,6 +88,7 @@ def _validate(result: dict) -> dict:
         "correct": list(result.get("correct") or []),
         "vague": list(result.get("vague") or []),
         "wrong_or_missing": list(result.get("wrong_or_missing") or []),
+        "notes_gaps": list(result.get("notes_gaps") or []),
         "summary": str(result.get("summary") or "").strip(),
     }
 

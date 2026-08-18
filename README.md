@@ -1,6 +1,6 @@
 # Explain-Back Tutor
 
-A terminal study tool built on the Feynman technique: you don't understand
+A terminal study system built on the Feynman technique: you don't understand
 something until you can explain it simply in your own words. You pick a
 concept, explain it in plain text, and it grades your explanation against
 your own notes — telling you what you got right, where you were vague, and
@@ -9,28 +9,35 @@ what you got wrong or left out.
 Unlike a flashcard app that tests your *recall*, this grades your
 *explanation* — a much harder, more honest test of real understanding.
 
-## How it works
+Built for teaching many subjects: load any set of notes, and it schedules
+what to review, tracks where you're weak, and flags where your notes
+themselves are thin.
 
-1. You load your notes once (a markdown file, concepts split by `##`
-   headings) into the concept store.
-2. You type a concept name — e.g. `inflation`.
-3. It asks you to explain it and does NOT show you the notes (that would
-   defeat the point).
-4. You type your explanation.
-5. It grades strictly against your source notes and prints structured,
-   colorized feedback plus a score out of 10.
-6. It tracks your score per concept over time, so `/weak` shows the
-   concepts you keep fumbling — your real study priorities.
+## What it does
+
+- **Grades your explanations** against your own notes, separating "vague"
+  from "wrong" from "not in the notes at all"
+- **Schedules reviews** with spaced repetition (SM-2), so concepts come
+  back right before you'd forget them
+- **Picks what to study next** — due reviews first, then a weighted mix of
+  weak spots, reinforcement, and unexplored concepts
+- **Flags gaps in your notes** — when you say something true that your
+  notes don't cover, that's a note to improve, not a mistake
+- **Summarizes each session** to a markdown log you can review later
+- **Shows a dashboard** of scores, coverage, and upcoming reviews
+- **Reminds you daily** via a native macOS notification
 
 ## Why it's free
 
 - **Grading**: `claude -p` (headless Claude Code) via your Claude
   subscription — NOT the paid per-token API.
-- **Interface**: your terminal. No server, no hosting, no ports.
+- **Interface**: your terminal, plus an optional local-only web dashboard.
+- **Scheduling**: `launchd`, built into macOS.
 - **Storage**: plain JSON files — no database.
 
-The only credential you need is a Claude Code token. Nothing else costs
-anything, and nothing needs to reach your machine from outside.
+The only credential you need is a Claude Code token. Nothing costs
+anything, nothing is exposed to the network, and no data leaves your
+machine except the grading prompt itself.
 
 ## Setup
 
@@ -48,9 +55,10 @@ pip install -r requirements.txt
 cp .env.example .env          # then fill in the token above
 python src/load_notes.py sample_notes.md    # try the 3 sample concepts first
 ```
-Later, load your real notes the same way. Each concept starts with a
+Load your real notes the same way. Each concept starts with a
 `## Concept Name` heading; everything under it is the source text you'll be
-graded against. Add `--replace` to overwrite instead of merge.
+graded against. Add `--replace` to overwrite instead of merge. Loading
+notes for many subjects is just many files, or one big file.
 
 ### 3. Study
 ```
@@ -59,63 +67,115 @@ python src/study.py
 
 ## Using it
 
-**Interactive** — `python src/study.py`
+### Interactive
 
-Type a concept name, then type your explanation (finish with a blank line):
-
-```
-> inflation
-  Prices go up over time so your money buys less.
-  Central banks raise interest rates to slow it down.
-
-╭──── inflation — 6/10 ─────────────────────────────╮
-│ Gets the core mechanism but loses precision on ... │
-│                                                    │
-│ Correct                                            │
-│   • Prices rising and purchasing power falling     │
-│ Vague                                              │
-│   • Doesn't capture "sustained" vs a one-off rise  │
-│ Wrong / missing                                    │
-│   • No mention of how rates actually cool spending │
-╰────────────────────────────────────────────────────╯
-```
-
-Commands: `/list` (all concepts), `/weak` (your lowest averages),
-`/help`, `/exit`. `/cancel` backs out mid-explanation.
-
-**One-shot / scriptable** — for piping, aliases, or cron jobs:
+`python src/study.py`, then type a concept name — or `/next` and let it
+choose for you. Type your explanation, finish with a blank line:
 
 ```
-python src/study.py list
-python src/study.py weak
-echo "my explanation here" | python src/study.py explain inflation
+> /next
+╭─ Next up ──────────────────────╮
+│ photosynthesis                 │
+│ due for review                 │
+╰────────────────────────────────╯
+
+  Plants take in CO2 and water, and use chlorophyll to capture sunlight...
+
+╭──── photosynthesis — 8/10 ──────────────────────────────╮
+│ The mechanism is accurate and well-sequenced...          │
+│                                                          │
+│ Correct                                                  │
+│   • Light reactions occur in the thylakoid membranes     │
+│ Vague                                                    │
+│   • Never states the overall energy-conversion purpose   │
+│ Wrong / missing                                          │
+│   • Restricts it to plants — notes include algae too     │
+│                                                          │
+│ Next review: 2026-08-19                                  │
+╰──────────────────────────────────────────────────────────╯
 ```
 
-These exit with a real status code (0 ok, 1 failure, 2 usage error), so
-they compose properly in shell scripts.
+Commands: `/next`, `/due`, `/list`, `/weak`, `/stats`, `/help`, `/exit`.
+`/cancel` backs out mid-explanation. On exit you get a session summary and
+a saved log.
+
+### One-shot / scriptable
+
+```
+python src/study.py list      # all loaded concepts
+python src/study.py due       # what's due for review
+python src/study.py next      # what to study now, and why
+python src/study.py weak      # your lowest averages
+python src/study.py stats     # coverage and overall average
+echo "my explanation" | python src/study.py explain inflation
+```
+
+These exit with real status codes (0 ok, 1 failure, 2 usage error), so
+they compose in shell scripts, aliases, and cron jobs.
+
+### Web dashboard
+
+```
+python src/web.py       # then open http://127.0.0.1:5000
+```
+
+Read-only view of scores over time, per-concept history, coverage, and the
+review queue. Binds to localhost only — it is not reachable from your
+network. There's also a `/api/data` JSON endpoint if you want to build on it.
+
+### Daily reminders (macOS)
+
+```
+./scheduling/install_reminder.sh          # daily at 19:00
+./scheduling/install_reminder.sh 9 30     # daily at 09:30
+./scheduling/install_reminder.sh --uninstall
+```
+
+Installs a `launchd` agent that posts a notification naming what's due. It
+stays silent when you're caught up — a reminder that fires when there's
+nothing to do just teaches you to ignore reminders.
+
+## How the scheduling works
+
+Scores map onto SM-2's quality scale (a 10-point score halves into SM-2's
+0–5). Score 6+ counts as a pass and pushes the next review further out
+(1 day → 6 days → multiplied by an ease factor). Score 5 or below is a
+lapse: the interval resets to 1 day and the ease drops, so a concept you
+keep fumbling keeps coming back.
+
+`next` honors due reviews above everything else. Only when nothing is due
+does it fall back to a weighted mix — 60% weak concepts, 30% reinforcing
+strong ones, 10% something you've never tried.
 
 ## Running the tests
 
 ```
 pytest -q
 ```
-70 tests cover the concept store, progress tracking, the conversation
-engine, the CLI's command routing and interactive loop, and the grader's
-JSON parsing/validation — all with the actual `claude -p` call mocked out,
-so the suite runs in a fraction of a second with no network use and no
-draw on your subscription. The grading pipeline itself was verified
-end-to-end against real `claude -p` calls during development.
+142 tests cover the concept store, spaced-repetition scheduling, progress
+tracking and its v1→v2 migration, session summaries, the CLI's command
+routing and interactive loop, the web dashboard, the reminder, and the
+grader's JSON parsing — all with the `claude -p` call mocked, so the suite
+runs in about a second with no network use and no draw on your
+subscription. The grading pipeline was verified end-to-end against real
+`claude -p` calls during development.
 
 ## Files
 
-- `src/study.py` — the terminal app (this is what you run)
-- `src/conversation.py` — transport-agnostic conversation engine
-- `src/concepts.py` — loads/searches your notes
-- `src/grader.py` — grades your explanation via `claude -p`
-- `src/progress.py` — tracks your scores per concept over time
-- `src/load_notes.py` — one-time notes loader
-- `sample_notes.md` — 3 ready-made concepts to test with
-- `tests/` — unit tests for everything except the live `claude -p` call
+| File | Purpose |
+|---|---|
+| `src/study.py` | the terminal app — this is what you run |
+| `src/scheduler.py` | SM-2 spaced repetition + adaptive concept selection |
+| `src/progress.py` | score history and review state, with v1 migration |
+| `src/grader.py` | grades an explanation via `claude -p` |
+| `src/concepts.py` | loads and searches your notes |
+| `src/session.py` | session recording and markdown summaries |
+| `src/conversation.py` | transport-agnostic conversation engine |
+| `src/load_notes.py` | notes loader |
+| `src/web.py` | local read-only dashboard |
+| `scheduling/remind.py` | macOS notification about what's due |
+| `scheduling/install_reminder.sh` | installs/removes the launchd agent |
+| `tests/` | 142 tests |
 
 ## What makes this worth building (and not generic)
 
@@ -126,7 +186,10 @@ strictly in your own source, so it distinguishes "you're vague here" from
 discipline — separating unsupported from contradicted — is the same
 principle behind a good RAG eval, applied to teaching yourself.
 
-`conversation.py` deliberately knows nothing about the terminal: it takes
-a session id and a string, and returns a string. Adding another front end
-later (a local web UI, a scheduled reminder, a chat platform) means
-writing an adapter, not touching the grading logic.
+The notes-gap detection falls out of that discipline for free, and is the
+part that matters most if you teach: it tells you where *your material* is
+thin, not just where your understanding is.
+
+`conversation.py` and `scheduler.py` deliberately know nothing about the
+terminal. Adding another front end means writing an adapter, not touching
+the grading or scheduling logic.
