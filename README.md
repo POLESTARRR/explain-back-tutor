@@ -24,6 +24,8 @@ themselves are thin.
 - **Organizes by subject**, so you can scope a session to one of them
 - **Tracks XP, levels, streaks and 12 badges**, all derived from your real
   history — so they apply retroactively and can never drift out of sync
+- **Answers questions as a grounded tutor** that knows your notes and your
+  scores, and flags out loud whenever it steps outside your notes
 - **Flags gaps in your notes** — when you say something true that your
   notes don't cover, that's a note to improve, not a mistake
 - **Summarizes each session** to a markdown log you can review later
@@ -135,7 +137,8 @@ choose for you. Type your explanation, finish with a blank line:
 ```
 
 Commands: `/next`, `/review`, `/due`, `/list`, `/subjects`, `/focus`,
-`/history <concept>`, `/progress`, `/weak`, `/stats`, `/help`, `/exit`.
+`/history <concept>`, `/progress`, `/ask <question>`, `/tutor`, `/weak`,
+`/stats`, `/help`, `/exit`.
 `/cancel` backs out mid-explanation. On exit you get a session summary and
 a saved log.
 
@@ -162,6 +165,9 @@ python src/study.py weak                 # your lowest averages
 python src/study.py stats                # coverage and overall average
 python src/study.py history inflation    # every attempt at one concept
 python src/study.py progress             # XP, level, streaks and badges
+python src/study.py tutor "why am I weak at inflation?"
+python src/study.py tutor                # back-and-forth tutor chat
+python src/study.py tutor --forget       # clear the tutor's memory
 echo "my explanation" | python src/study.py explain inflation
 ```
 
@@ -208,6 +214,31 @@ keep fumbling keeps coming back.
 does it fall back to a weighted mix — 60% weak concepts, 30% reinforcing
 strong ones, 10% something you've never tried.
 
+## The tutor
+
+Grading is one-directional — you explain, it judges. The tutor is the other
+half: you ask, it answers.
+
+```
+python src/study.py tutor "what did I keep missing on photosynthesis?"
+python src/study.py tutor                # open a back-and-forth chat
+```
+
+It sees your notes and your score history, so it answers specifically
+("photosynthesis and supervised learning, both at 6.5/10") rather than
+generically. Conversation memory persists across runs; `--forget` clears it.
+
+**It is grounded on purpose.** The same discipline that makes the grading
+trustworthy applies here: it answers from *your* notes, and when it steps
+outside them it has to say so —
+
+> *"(Your notes don't cover study technique, so from general knowledge: …)"*
+
+If your notes contradict what it believes, it says that too, rather than
+silently overriding your material. An ungrounded study chatbot will happily
+teach you things your source doesn't support and you'd never notice; this
+one makes the boundary visible.
+
 ## XP, levels and badges
 
 `study.py progress` shows your level, XP, streaks, and which of the 12
@@ -253,7 +284,7 @@ automatically on load, so older files keep working.
 ```
 pytest
 ```
-277 tests cover the concept store and its subject grouping, spaced-repetition
+322 tests cover the concept store and its subject grouping, spaced-repetition
 scheduling, XP/levels/streaks/badges, progress tracking, both store migrations,
 atomic writes and corruption recovery, grader retries and explanation
 preservation, session summaries, the review drill, per-concept history, the
@@ -277,13 +308,14 @@ CI runs the suite on Python 3.10–3.13 on every push.
 | `src/concepts.py` | loads/searches your notes, groups them by subject |
 | `src/storage.py` | atomic JSON writes and corruption recovery |
 | `src/gamification.py` | XP, levels, streaks and badges (all derived) |
+| `src/tutor.py` | grounded tutor chat with persistent memory |
 | `src/session.py` | session recording and markdown summaries |
 | `src/conversation.py` | transport-agnostic conversation engine |
 | `src/load_notes.py` | notes loader |
 | `src/web.py` | local read-only dashboard |
 | `scheduling/remind.py` | macOS notification about what's due |
 | `scheduling/install_reminder.sh` | installs/removes the launchd agent |
-| `tests/` | 277 tests |
+| `tests/` | 322 tests |
 
 ## What makes this worth building (and not generic)
 

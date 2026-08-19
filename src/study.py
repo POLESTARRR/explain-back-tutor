@@ -47,6 +47,8 @@ from src.gamification import (  # noqa: E402
 from src.progress import ProgressStore  # noqa: E402
 from src.scheduler import pick_next  # noqa: E402
 from src.session import StudySession  # noqa: E402
+from src.tutor import TutorError, TutorHistory  # noqa: E402
+from src.tutor import answer as tutor_answer  # noqa: E402
 
 # Progress is keyed by "session id" in the shared engine; the terminal is one
 # fixed identity so scores persist across runs.
@@ -371,6 +373,50 @@ def read_multiline_explanation(concept: str) -> str | None:
     return text or None
 
 
+def ask_tutor(
+    concepts: ConceptStore, progress: ProgressStore, question: str, history: TutorHistory
+) -> int:
+    """One grounded tutor question. Returns a process exit code."""
+    with console.status("[cyan]Thinking...[/cyan]"):
+        try:
+            reply = tutor_answer(question, concepts, progress, history, LOCAL_CHAT_ID)
+        except TutorError as exc:
+            console.print(f"[red]Tutor unavailable:[/red] {exc}")
+            return 1
+    console.print(Panel(reply, title="[bold]Tutor[/bold]", border_style="magenta"))
+    return 0
+
+
+def tutor_repl(concepts: ConceptStore, progress: ProgressStore, history: TutorHistory) -> int:
+    """Conversational tutor mode. Remembers across runs."""
+    remembered = len(history)
+    console.print(
+        Panel(
+            "[bold]Tutor[/bold] — ask about anything in your notes.\n"
+            "[dim]Answers come from your own notes; anything outside them is flagged.\n"
+            f"{remembered // 2} earlier exchange(s) remembered. "
+            "/forget clears memory, /exit leaves.[/dim]",
+            border_style="magenta",
+        )
+    )
+    while True:
+        try:
+            question = input("\nask> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[dim]Bye.[/dim]")
+            return 0
+        if not question:
+            continue
+        if question.lower() in EXIT_COMMANDS:
+            console.print("[dim]Bye.[/dim]")
+            return 0
+        if question == "/forget":
+            history.clear()
+            console.print("[dim]Tutor memory cleared.[/dim]")
+            continue
+        ask_tutor(concepts, progress, question, history)
+
+
 def subjects_by_concept(concepts: ConceptStore) -> dict[str, str | None]:
     return {name: concepts.subject_of(name) for name in concepts.names()}
 
@@ -537,6 +583,8 @@ HELP_LINES = (
     "/focus <subject>  scope to one subject (/focus alone clears it)\n"
     "/history <name>   your attempts at one concept\n"
     "/progress         XP, level, streaks and badges\n"
+    "/ask <question>   ask the tutor one question\n"
+    "/tutor            open a back-and-forth tutor chat\n"
     "/weak             your lowest averages\n"
     "/stats            coverage and overall average\n"
     "/exit             finish and save a session log"
@@ -599,6 +647,13 @@ def interactive(concepts: ConceptStore, progress: ProgressStore, subject: str | 
                 render_stats(concepts, progress, focus)
             elif command == "/progress":
                 render_achievements(concepts, progress)
+            elif command == "/ask":
+                if argument:
+                    ask_tutor(concepts, progress, argument, TutorHistory())
+                else:
+                    console.print("[yellow]Usage:[/yellow] /ask <your question>")
+            elif command == "/tutor":
+                tutor_repl(concepts, progress, TutorHistory())
             elif command == "/help":
                 console.print(Panel(HELP_LINES, title="Commands", border_style="cyan"))
             elif command == "/focus":
@@ -673,6 +728,10 @@ def build_parser() -> argparse.ArgumentParser:
     history = sub.add_parser("history", help="Show your attempts at one concept")
     history.add_argument("concept", nargs="+", help="Concept name")
 
+    tutor = sub.add_parser("tutor", help="Ask the tutor, grounded in your notes")
+    tutor.add_argument("question", nargs="*", help="Question (omit for a back-and-forth chat)")
+    tutor.add_argument("--forget", action="store_true", help="Clear tutor memory and exit")
+
     return parser
 
 
@@ -720,6 +779,15 @@ def run(argv: list[str]) -> int:
         return review_session(concepts, progress, subject)
     if command == "history":
         return render_history(concepts, progress, " ".join(args.concept))
+    if command == "tutor":
+        history = TutorHistory()
+        if args.forget:
+            history.clear()
+            console.print("[dim]Tutor memory cleared.[/dim]")
+            return 0
+        if args.question:
+            return ask_tutor(concepts, progress, " ".join(args.question), history)
+        return tutor_repl(concepts, progress, history)
     if command == "explain":
         concept = " ".join(args.concept)
         # Validate before asking for an explanation, so a typo doesn't cost the

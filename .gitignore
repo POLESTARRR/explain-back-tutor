@@ -6,6 +6,7 @@ data/concepts.json
 data/progress.json
 data/sessions/
 data/unsent/
+data/tutor_history.json
 data/reminder.log
 data/*.corrupt-*
 .dist/
