@@ -62,7 +62,7 @@ el("askForm").addEventListener("submit", async (e) => {
   el("question").value = "";
   el("askBtn").disabled = true;
   el("status").innerHTML =
-    `<div class="glass card row" style="margin-top:1rem"><span class="spinner"></span><span class="dim">Thinking…</span></div>`;
+    `<div class="glass card row" style="margin-top:1rem"><span class="spinner"></span><span class="dim">Thinking...</span></div>`;
 
   try {
     const res = await fetch("/api/tutor", {

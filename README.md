@@ -249,11 +249,11 @@ nothing to do just teaches you to ignore reminders.
 
 ## How the scheduling works
 
-Scores map onto SM-2's quality scale (a 10-point score halves into SM-2's
-0–5). Score 6+ counts as a pass and pushes the next review further out
-(1 day → 6 days → multiplied by an ease factor). Score 5 or below is a
-lapse: the interval resets to 1 day and the ease drops, so a concept you
-keep fumbling keeps coming back.
+Scores map onto SM-2's quality scale, where a 10 point score halves into
+SM-2's 0 to 5. Score 6 or above counts as a pass and pushes the next review
+further out: 1 day, then 6 days, then multiplied by an ease factor. Score 5
+or below is a lapse. The interval resets to 1 day and the ease drops, so a
+concept you keep fumbling keeps coming back.
 
 `next` honors due reviews above everything else. Only when nothing is due
 does it fall back to a weighted mix: 60% weak concepts, 30% reinforcing
@@ -277,7 +277,7 @@ generically. Conversation memory persists across runs; `--forget` clears it.
 trustworthy applies here: it answers from *your* notes, and when it steps
 outside them it has to say so:
 
-> *"(Your notes don't cover study technique, so from general knowledge: …)"*
+> *"(Your notes don't cover study technique, so from general knowledge: ...)"*
 
 If your notes contradict what it believes, it says that too, rather than
 silently overriding your material. An ungrounded study chatbot will happily
@@ -340,7 +340,7 @@ second with no network use and no draw on your subscription. The grading
 pipeline was verified end-to-end against real `claude -p` calls during
 development.
 
-CI runs the suite on Python 3.10–3.13 on every push.
+CI runs the suite on Python 3.10 to 3.13 on every push.
 
 ## Files
 
