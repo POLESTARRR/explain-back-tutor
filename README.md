@@ -31,7 +31,8 @@ themselves are thin.
 - **Flags gaps in your notes** — when you say something true that your
   notes don't cover, that's a note to improve, not a mistake
 - **Summarizes each session** to a markdown log you can review later
-- **Shows a dashboard** of scores, coverage, and upcoming reviews
+- **Runs in the browser too** — a full read/write interface sharing the same
+  engine, so terminal and browser can never disagree
 - **Reminds you daily** via a native macOS notification
 - **Never loses your data** — atomic writes, and a corrupt file is
   quarantined rather than crashing the app or being overwritten
@@ -40,7 +41,7 @@ themselves are thin.
 
 - **Grading**: `claude -p` (headless Claude Code) via your Claude
   subscription — NOT the paid per-token API.
-- **Interface**: your terminal, plus an optional local-only web dashboard.
+- **Interface**: your terminal, plus a local-only browser app.
 - **Scheduling**: `launchd`, built into macOS.
 - **Storage**: plain JSON files — no database.
 
@@ -206,19 +207,33 @@ Most commands take `--subject S` to scope them; `weak` also takes
 error), so they compose in shell scripts and cron jobs. `--help` works on
 the top level and on every subcommand.
 
-### Web dashboard
+### Browser interface
 
 ```
-python src/web.py               # then open http://127.0.0.1:5050
-python src/web.py --port 8080   # if that port is taken
+python src/webapp.py               # then open http://127.0.0.1:5050
+python src/webapp.py --port 8080   # if that port is taken
 ```
 
-Read-only view of scores over time, per-subject rollups, per-concept
-history, coverage, and the review queue. Binds to localhost only — it is
-not reachable from your network. There's also a `/api/data` JSON endpoint.
+A full read/write interface, not just a dashboard — explain concepts and
+get graded, drag in photos of notes, ask the tutor, and see your progress.
 
-(It defaults to port 5050 rather than 5000 because macOS AirPlay Receiver
-occupies 5000, which makes a dashboard on that port fail confusingly.)
+| Page | What it does |
+|---|---|
+| **Study** | picks a concept, takes your explanation, shows colour-coded feedback |
+| **Progress** | level, XP, streaks, badges, per-subject coverage, every concept |
+| **Tutor** | grounded chat with persistent memory |
+| **Notes** | drag-and-drop photo upload, with a review step before saving |
+
+It adds no study logic of its own — every route delegates to the same
+modules the terminal calls, so the two front ends can never disagree about
+a score or a schedule. There's a test asserting exactly that.
+
+**It binds to localhost only.** `--host 0.0.0.0` exposes it to your
+network, which is unauthenticated by design and lets anyone who reaches it
+spend your Claude subscription, so it warns loudly when you do.
+
+(Port 5050 rather than 5000 because macOS AirPlay Receiver occupies 5000
+and makes a server there fail confusingly.)
 
 ### Daily reminders (macOS)
 
@@ -314,7 +329,7 @@ automatically on load, so older files keep working.
 ```
 pytest
 ```
-341 tests cover the concept store and its subject grouping, spaced-repetition
+356 tests cover the concept store and its subject grouping, spaced-repetition
 scheduling, XP/levels/streaks/badges, progress tracking, both store migrations,
 atomic writes and corruption recovery, grader retries and explanation
 preservation, session summaries, the review drill, per-concept history, the
@@ -343,10 +358,11 @@ CI runs the suite on Python 3.10–3.13 on every push.
 | `src/conversation.py` | transport-agnostic conversation engine |
 | `src/load_notes.py` | notes loader |
 | `src/import_notes.py` | turns photos of notes into markdown via claude vision |
-| `src/web.py` | local read-only dashboard |
+| `src/webapp.py` | browser interface (study, progress, tutor, notes) |
+| `src/templates/`, `src/static/` | the web UI |
 | `scheduling/remind.py` | macOS notification about what's due |
 | `scheduling/install_reminder.sh` | installs/removes the launchd agent |
-| `tests/` | 341 tests |
+| `tests/` | 356 tests |
 
 ## What makes this worth building (and not generic)
 
