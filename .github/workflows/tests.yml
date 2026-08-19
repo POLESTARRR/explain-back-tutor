@@ -25,6 +25,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # The deploy dependencies too: some tests build real Gemini request
+          # payloads rather than faking them, so the SDK has to be present.
+          # Installing them here also proves the deploy set still resolves.
+          pip install -r requirements-deploy.txt
 
       - name: Run tests
         # The suite mocks out `claude -p` entirely, so it needs no credentials
