@@ -243,3 +243,84 @@ def test_both_providers_satisfy_the_interface(provider_name, monkeypatch):
     assert provider.name == provider_name
     assert callable(provider.complete)
     assert callable(provider.complete_with_image)
+
+
+# ------------------------------------------------------- model fallback
+
+
+class SequencedModels:
+    """Raises the queued error for each call until one succeeds."""
+
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.tried = []
+
+    def generate_content(self, model, contents):
+        self.tried.append(model)
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+
+        class R:
+            pass
+
+        R.text = outcome
+        return R()
+
+
+def test_overloaded_model_falls_through_to_the_next():
+    models = SequencedModels([RuntimeError("503 UNAVAILABLE"), "recovered"])
+    provider = gemini_with(models)
+    assert provider.complete("prompt") == "recovered"
+    assert len(models.tried) == 2
+    assert models.tried[0] != models.tried[1]
+
+
+def test_fallback_tries_each_model_once_then_gives_up():
+    from src.llm import GEMINI_MODELS
+
+    models = SequencedModels([RuntimeError("503 UNAVAILABLE")] * len(GEMINI_MODELS))
+    with pytest.raises(ProviderError, match="503"):
+        gemini_with(models).complete("prompt")
+    assert models.tried == list(GEMINI_MODELS)
+
+
+def test_permanent_error_does_not_try_other_models():
+    """A bad key fails identically everywhere; burning the list helps nobody."""
+    models = SequencedModels([RuntimeError("403 PERMISSION_DENIED"), "unused"])
+    with pytest.raises(ProviderError) as exc:
+        gemini_with(models).complete("prompt")
+    assert exc.value.transient is False
+    assert len(models.tried) == 1
+
+
+def test_pinned_model_is_never_substituted():
+    """An explicit choice must be honoured, not silently swapped on overload."""
+    models = SequencedModels([RuntimeError("503 UNAVAILABLE")])
+    provider = gemini_with(models, model="gemini-3.5-flash")
+    with pytest.raises(ProviderError):
+        provider.complete("prompt")
+    assert models.tried == ["gemini-3.5-flash"]
+
+
+def test_pinned_via_env_is_also_respected(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+    provider = GeminiProvider(api_key="k")
+    assert provider.models == ("gemini-3.1-flash-lite",)
+
+
+def test_default_tries_the_preference_list():
+    from src.llm import GEMINI_MODELS
+
+    assert GeminiProvider(api_key="k").models == GEMINI_MODELS
+    assert GeminiProvider(api_key="k").model == GEMINI_MODELS[0]
+
+
+def test_image_path_also_falls_back(tmp_path):
+    models = SequencedModels([RuntimeError("503 UNAVAILABLE"), "## Concept\n\nnotes"])
+    provider = gemini_with(models)
+    image = tmp_path / "p.png"
+    image.write_bytes(b"\x89PNG")
+
+    assert provider.complete_with_image("read", image).startswith("## Concept")
+    assert len(models.tried) == 2

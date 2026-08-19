@@ -303,3 +303,69 @@ def test_failed_answer_does_not_record_turns(concepts, progress, history):
         answer("q", concepts, progress, history, SESSION, ask=boom)
     # A failed exchange must not pollute memory.
     assert len(history) == 0
+
+
+# ----------------------------------------------- subject and stem matching
+
+
+def test_subject_question_pulls_the_whole_subject():
+    """The failure that started this: a subject full of concepts, none of whose
+    names contain the subject word, must still be found."""
+    names = ["routers", "switches", "cables or wireless signals", "photosynthesis"]
+    subjects = {
+        "routers": "networking",
+        "switches": "networking",
+        "cables or wireless signals": "networking",
+        "photosynthesis": "biology",
+    }
+    matched = relevant_concepts("tell me about networking", names, subjects)
+    assert "routers" in matched
+    assert "switches" in matched
+    assert "cables or wireless signals" in matched
+    assert "photosynthesis" not in matched
+
+
+def test_stemming_matches_networking_to_network():
+    names = ["network interface cards"]
+    assert relevant_concepts("networking", names, {}) == ["network interface cards"]
+
+
+def test_stemming_handles_plurals():
+    assert relevant_concepts("router", ["routers"], {}) == ["routers"]
+    assert relevant_concepts("routers", ["router"], {}) == ["router"]
+
+
+def test_exact_name_still_outranks_subject_match():
+    names = ["routers", "switches"]
+    subjects = {"routers": "networking", "switches": "networking"}
+    assert relevant_concepts("what is a router", names, subjects)[0] == "routers"
+
+
+def test_subject_match_widens_the_limit():
+    """A subject question deserves more context than a single-concept question."""
+    names = [f"concept {i}" for i in range(8)]
+    subjects = {n: "networking" for n in names}
+    assert len(relevant_concepts("networking", names, subjects)) > 4
+
+
+def test_unrelated_subject_is_not_pulled_in():
+    names = ["routers", "inflation"]
+    subjects = {"routers": "networking", "inflation": "economics"}
+    assert relevant_concepts("networking", names, subjects) == ["routers"]
+
+
+def test_subjects_argument_is_optional():
+    assert relevant_concepts("inflation", ["inflation"]) == ["inflation"]
+
+
+def test_answer_passes_subjects_through(concepts, progress, history):
+    """The store's subjects must reach the matcher, or the fix does nothing."""
+    concepts.add("Routers", "A router forwards packets between networks.", subject="Networking")
+    captured = {}
+
+    def fake_ask(prompt):
+        captured["prompt"] = prompt
+        return "ok"
+
+    answer("explain networking to me", concepts, progress, history, SESSION, ask=fake_ask)
+    assert "forwards packets between networks" in captured["prompt"]

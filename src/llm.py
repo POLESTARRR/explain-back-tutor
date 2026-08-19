@@ -23,9 +23,17 @@ DEFAULT_PROVIDER = "claude"
 CLAUDE_BIN = "claude"
 CLAUDE_TIMEOUT_SECONDS = 180
 
-# Verified available on the free tier. Flash (not flash-lite) for grading: the
-# vague-vs-wrong distinction is a judgement call and the lite tiers blur it.
-GEMINI_DEFAULT_MODEL = "gemini-flash-latest"
+# Verified against a real free-tier key. Ordered by preference, and tried in turn
+# when one is overloaded: free-tier models return 503 under load often enough that
+# a single hard-coded model makes the app look broken when it is merely busy.
+# Flash before flash-lite, because the vague-vs-wrong distinction is a judgement
+# call and the lite tiers blur it.
+GEMINI_MODELS = (
+    "gemini-3.5-flash",
+    "gemini-flash-latest",
+    "gemini-3.1-flash-lite",
+)
+GEMINI_DEFAULT_MODEL = GEMINI_MODELS[0]
 
 
 class ProviderError(RuntimeError):
@@ -105,13 +113,21 @@ class GeminiProvider:
 
     name = "gemini"
 
-    def __init__(self, api_key: str | None = None, model: str = GEMINI_DEFAULT_MODEL):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         # Read explicitly rather than letting the SDK scan the environment: it
         # silently prefers GOOGLE_API_KEY over GEMINI_API_KEY, which can pick up
         # an unrelated key that happens to be set on the machine.
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or ""
-        self.model = os.environ.get("GEMINI_MODEL", model)
+        pinned = model or os.environ.get("GEMINI_MODEL")
+        # A pinned model means exactly that: no silent substitution behind the
+        # user's back. Otherwise fall through the preference list on overload.
+        self.models = (pinned,) if pinned else GEMINI_MODELS
         self._client = None
+
+    @property
+    def model(self) -> str:
+        """The model actually tried first."""
+        return self.models[0]
 
     def _get_client(self):
         if self._client is not None:
@@ -145,18 +161,36 @@ class GeminiProvider:
         permanent = any(code in message for code in ("400", "401", "403", "404"))
         return ProviderError(f"Gemini call failed: {message[:400]}", transient=not permanent)
 
-    def complete(self, prompt: str) -> str:
+    def _generate(self, contents) -> str:
+        """Try each candidate model, moving on when one is merely overloaded."""
         client = self._get_client()
-        try:
-            response = client.models.generate_content(model=self.model, contents=prompt)
-        except ProviderError:
-            raise
-        except Exception as exc:  # noqa: BLE001 - SDK raises many concrete types
-            raise self._wrap(exc) from exc
-        return self._text_of(response)
+        last: ProviderError | None = None
+
+        for model in self.models:
+            try:
+                return self._text_of(
+                    client.models.generate_content(model=model, contents=contents)
+                )
+            except ProviderError as exc:
+                # An empty reply is this model's problem; a permanent error is
+                # ours. Neither is worth trying the next model for.
+                if not exc.transient:
+                    raise
+                last = exc
+            except Exception as exc:  # noqa: BLE001 - SDK raises many concrete types
+                wrapped = self._wrap(exc)
+                if not wrapped.transient:
+                    raise wrapped from exc
+                last = wrapped
+
+        raise last or ProviderError("No Gemini model produced a reply.")
+
+    def complete(self, prompt: str) -> str:
+        return self._generate(prompt)
 
     def complete_with_image(self, prompt: str, image: Path) -> str:
-        client = self._get_client()
+        # Surface a missing key before doing any local work.
+        self._get_client()
 
         # Read the file before touching the SDK. A missing or unreadable image is
         # a permanent, local problem; doing it inside the API try-block would let
@@ -171,14 +205,10 @@ class GeminiProvider:
 
             mime = mimetypes.guess_type(str(image))[0] or "image/png"
             part = types.Part.from_bytes(data=data, mime_type=mime)
-            response = client.models.generate_content(
-                model=self.model, contents=[part, prompt]
-            )
-        except ProviderError:
-            raise
         except Exception as exc:  # noqa: BLE001
             raise self._wrap(exc) from exc
-        return self._text_of(response)
+
+        return self._generate([part, prompt])
 
 
 # ----------------------------------------------------------------- factory

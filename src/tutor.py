@@ -18,11 +18,11 @@ is trimmed to the most recent turns to keep prompts bounded.
 from __future__ import annotations
 
 import re
-import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.llm import ProviderError, get_provider
 from src.storage import read_json, write_json
 
 DEFAULT_HISTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "tutor_history.json"
@@ -110,24 +110,58 @@ class TutorHistory:
 # ---------------------------------------------------------------- context
 
 
+def _stem(word: str) -> str:
+    """Crude suffix stripping so 'networking' and 'network' match each other."""
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(word) > len(suffix) + 3 and word.endswith(suffix):
+            return word[: -len(suffix)]
+    return word
+
+
 def _tokens(text: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2}
+    return {_stem(w) for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 2}
 
 
-def relevant_concepts(question: str, concept_names: list[str], limit: int = MAX_NOTES_INCLUDED) -> list[str]:
-    """Concepts whose names best match the question, most relevant first."""
+def relevant_concepts(
+    question: str,
+    concept_names: list[str],
+    subjects: dict[str, str | None] | None = None,
+    limit: int = MAX_NOTES_INCLUDED,
+) -> list[str]:
+    """Concepts most relevant to the question, most relevant first.
+
+    Matching runs over three signals, because name-only matching quietly fails
+    exactly when it matters. Someone with a `networking` subject full of routers
+    and switches will ask about "networking", a word that appears in no concept
+    name, and get told their notes cover nothing.
+    """
     asked = _tokens(question)
     if not asked:
         return []
 
+    lowered = question.lower()
+    subjects = subjects or {}
     scored: list[tuple[int, str]] = []
+
+    # A question naming a subject should pull that whole subject in.
+    matched_subjects = {
+        subject
+        for subject in {s for s in subjects.values() if s}
+        if subject.lower() in lowered or (_tokens(subject) & asked)
+    }
+    if matched_subjects:
+        limit = max(limit, 6)
+
     for name in concept_names:
-        if name.lower() in question.lower():
-            scored.append((100, name))  # whole name appears verbatim
+        if name.lower() in lowered:
+            scored.append((100, name))  # the whole name appears verbatim
             continue
-        overlap = len(_tokens(name) & asked)
-        if overlap:
-            scored.append((overlap, name))
+
+        score = 3 * len(_tokens(name) & asked)
+        if subjects.get(name) in matched_subjects:
+            score += 2
+        if score:
+            scored.append((score, name))
 
     scored.sort(key=lambda t: (-t[0], t[1]))
     return [name for _, name in scored[:limit]]
@@ -189,27 +223,11 @@ def build_prompt(
 
 
 def ask_claude(prompt: str) -> str:
+    """Send one prompt to the configured backend."""
     try:
-        proc = subprocess.run(
-            [CLAUDE_BIN, "-p", prompt],
-            capture_output=True,
-            text=True,
-            timeout=TUTOR_TIMEOUT_SECONDS,
-        )
-    except FileNotFoundError as exc:
-        raise TutorError(
-            "`claude` CLI not found on PATH. Install Claude Code and run `claude setup-token`."
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise TutorError(f"Tutor timed out after {TUTOR_TIMEOUT_SECONDS}s.") from exc
-
-    if proc.returncode != 0:
-        raise TutorError(f"`claude -p` exited {proc.returncode}: {proc.stderr.strip()[:400]}")
-
-    reply = proc.stdout.strip()
-    if not reply:
-        raise TutorError("Tutor returned an empty reply.")
-    return reply
+        return get_provider().complete(prompt)
+    except ProviderError as exc:
+        raise TutorError(str(exc)) from exc
 
 
 def answer(
@@ -222,7 +240,8 @@ def answer(
 ) -> str:
     """Answer one question, grounded in the student's notes and history."""
     names = concepts.names()
-    matched = relevant_concepts(question, names)
+    subjects = {name: concepts.subject_of(name) for name in names}
+    matched = relevant_concepts(question, names, subjects)
     notes = {name: concepts.get(name) for name in matched if concepts.get(name)}
 
     summary = build_history_summary(

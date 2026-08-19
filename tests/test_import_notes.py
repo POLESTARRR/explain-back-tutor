@@ -103,7 +103,7 @@ def test_timeout(image, monkeypatch):
         raise subprocess.TimeoutExpired(cmd="claude", timeout=180)
 
     monkeypatch.setattr(subprocess, "run", boom)
-    with pytest.raises(ImportError_, match="Timed out"):
+    with pytest.raises(ImportError_, match="timed out"):
         transcribe_image(image)
 
 

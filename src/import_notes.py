@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.concepts import ConceptStore, parse_markdown_notes  # noqa: E402
+from src.llm import ProviderError, get_provider  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 NOTES_DIR = PROJECT_ROOT / "notes"
@@ -86,24 +87,11 @@ def transcribe_image(image: Path, subject: str | None = None) -> str:
         prompt = PROMPT.format(path=f"./{relative}", subject_rule=subject_rule)
 
         try:
-            proc = subprocess.run(
-                [CLAUDE_BIN, "-p", prompt],
-                capture_output=True,
-                text=True,
-                timeout=IMPORT_TIMEOUT_SECONDS,
-                cwd=str(PROJECT_ROOT),
-            )
-        except FileNotFoundError as exc:
-            raise ImportError_(
-                "`claude` CLI not found on PATH. Install Claude Code and run `claude setup-token`."
-            ) from exc
-        except subprocess.TimeoutExpired as exc:
-            raise ImportError_(f"Timed out reading {image.name} after {IMPORT_TIMEOUT_SECONDS}s.") from exc
+            raw = get_provider().complete_with_image(prompt, staged)
+        except ProviderError as exc:
+            raise ImportError_(str(exc)) from exc
 
-        if proc.returncode != 0:
-            raise ImportError_(f"`claude -p` exited {proc.returncode}: {proc.stderr.strip()[:300]}")
-
-        markdown = _strip_fences(proc.stdout)
+        markdown = _strip_fences(raw)
         if not markdown:
             raise ImportError_(f"Got an empty transcription for {image.name}.")
         if "##" not in markdown:

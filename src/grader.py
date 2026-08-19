@@ -1,21 +1,20 @@
-"""Grades a user's explanation of a concept against source notes, via `claude -p`.
+"""Grades a user's explanation of a concept against their source notes.
 
-Uses headless Claude Code (your subscription, not the metered API) as the judge.
-The model never sees this file's prompt template pre-filled with the user's
-notes on disk anywhere else, the notes + explanation are passed fresh each call
-so grading always stays grounded in what the user actually wrote for that concept.
+The judge is whichever backend `llm.py` is configured for: `claude -p` locally
+on a Claude subscription, or Gemini's free tier when deployed. The notes and the
+explanation are passed fresh on every call, so grading stays grounded in what the
+user actually wrote for that concept rather than in anything the model recalls.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import subprocess
 import time
 from typing import Callable
 
-CLAUDE_BIN = "claude"
-GRADE_TIMEOUT_SECONDS = 90
+from src.llm import ProviderError, get_provider
+
 GRADE_ATTEMPTS = 3           # total tries, including the first
 RETRY_BACKOFF_SECONDS = 2    # multiplied by the attempt number
 
@@ -106,29 +105,18 @@ def _validate(result: dict) -> dict:
     }
 
 
-def _grade_once(concept: str, notes: str, explanation: str) -> dict:
-    """One `claude -p` grading attempt. Raises GradingError on any failure."""
+def _grade_once(concept: str, notes: str, explanation: str, provider=None) -> dict:
+    """One grading attempt against the configured backend."""
     prompt = GRADING_PROMPT_TEMPLATE.format(concept=concept, notes=notes, explanation=explanation)
+    provider = provider or get_provider()
     try:
-        proc = subprocess.run(
-            [CLAUDE_BIN, "-p", prompt],
-            capture_output=True,
-            text=True,
-            timeout=GRADE_TIMEOUT_SECONDS,
-        )
-    except FileNotFoundError as exc:
-        # Retrying cannot fix a missing binary.
-        raise GradingError(
-            "`claude` CLI not found on PATH. Install Claude Code and run `claude setup-token`.",
-            transient=False,
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise GradingError(f"Grading timed out after {GRADE_TIMEOUT_SECONDS}s.") from exc
+        raw = provider.complete(prompt)
+    except ProviderError as exc:
+        # Carry the backend's own transient/permanent judgement through, so a
+        # missing binary or a bad API key is not retried three times over.
+        raise GradingError(str(exc), transient=exc.transient) from exc
 
-    if proc.returncode != 0:
-        raise GradingError(f"`claude -p` exited {proc.returncode}: {proc.stderr.strip()[:500]}")
-
-    return _validate(_extract_json(proc.stdout))
+    return _validate(_extract_json(raw))
 
 
 def grade_explanation(
@@ -137,6 +125,7 @@ def grade_explanation(
     explanation: str,
     attempts: int = GRADE_ATTEMPTS,
     on_retry: Callable[[int, GradingError], None] | None = None,
+    provider=None,
 ) -> dict:
     """Grade `explanation` against `notes`, retrying transient failures.
 
@@ -148,10 +137,12 @@ def grade_explanation(
     Raises GradingError once retries are exhausted, so callers decide how to
     surface it rather than silently mis-scoring the user.
     """
+    # Build the provider once so a retry does not re-read config or re-open a client.
+    provider = provider or get_provider()
     last_error: GradingError | None = None
     for attempt in range(1, max(1, attempts) + 1):
         try:
-            return _grade_once(concept, notes, explanation)
+            return _grade_once(concept, notes, explanation, provider)
         except GradingError as exc:
             last_error = exc
             if not exc.transient or attempt >= attempts:
