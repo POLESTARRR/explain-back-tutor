@@ -120,7 +120,7 @@ def test_empty_transcription_is_rejected(image, monkeypatch):
 
 
 def test_transcription_without_headings_is_rejected(image, monkeypatch):
-    # A photo of a cat produces prose, not concepts — better to fail loudly.
+    # A photo of a cat produces prose, not concepts, better to fail loudly.
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: _proc(0, "just some prose"))
     with pytest.raises(ImportError_, match="No '## Concept' headings"):
         transcribe_image(image)

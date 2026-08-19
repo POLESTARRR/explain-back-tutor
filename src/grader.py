@@ -2,7 +2,7 @@
 
 Uses headless Claude Code (your subscription, not the metered API) as the judge.
 The model never sees this file's prompt template pre-filled with the user's
-notes on disk anywhere else — the notes + explanation are passed fresh each call
+notes on disk anywhere else, the notes + explanation are passed fresh each call
 so grading always stays grounded in what the user actually wrote for that concept.
 """
 
@@ -21,7 +21,7 @@ RETRY_BACKOFF_SECONDS = 2    # multiplied by the attempt number
 
 GRADING_PROMPT_TEMPLATE = """You are a strict but fair study grader using the Feynman technique. \
 A student is trying to prove they understand a concept by explaining it in their own words. \
-Grade their explanation ONLY against the source notes below — do not use outside knowledge, \
+Grade their explanation ONLY against the source notes below, do not use outside knowledge, \
 and do not reward correct-sounding claims that the notes don't actually support.
 
 SOURCE NOTES for "{concept}":

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Feynly — terminal study tool.
+"""Feynly, terminal study tool.
 
 Interactive:
     python src/study.py
     python src/study.py --subject chemistry     # scope the session to one subject
 
-One-shot (scriptable — pipe it, alias it, or call it from cron/launchd):
+One-shot (scriptable, pipe it, alias it, or call it from cron/launchd):
     python src/study.py list [--subject S]
     python src/study.py due [--subject S]
     python src/study.py next [--subject S]
@@ -98,7 +98,7 @@ def render_feedback(concept: str, result: dict, next_due: str | None = None) -> 
     section("Correct", result["correct"], "green")
     section("Vague", result["vague"], "yellow")
     section("Wrong / missing", result["wrong_or_missing"], "red")
-    # Not a mistake by you — a hole in your source material.
+    # Not a mistake by you, a hole in your source material.
     section("Not covered by your notes", result.get("notes_gaps", []), "cyan")
 
     if next_due:
@@ -107,7 +107,7 @@ def render_feedback(concept: str, result: dict, next_due: str | None = None) -> 
     console.print(
         Panel(
             body,
-            title=f"[bold]{concept}[/bold] — [{style}]{result['score']:.0f}/10[/{style}]",
+            title=f"[bold]{concept}[/bold]  [{style}]{result['score']:.0f}/10[/{style}]",
             border_style=style,
         )
     )
@@ -155,7 +155,7 @@ def render_subjects(store: ConceptStore, progress: ProgressStore) -> None:
             avg = sum(averages[n] for n in studied) / len(studied)
             avg_cell = f"[{score_style(avg)}]{avg:.1f}/10[/{score_style(avg)}]"
         else:
-            avg_cell = "[dim]—[/dim]"
+            avg_cell = "[dim]-[/dim]"
         table.add_row(subject, str(len(names)), f"{len(studied)}/{len(names)}", avg_cell)
     console.print(table)
 
@@ -169,7 +169,7 @@ def render_weak(
         if allowed is None or row[0] in allowed
     ][:limit]
     if not rows:
-        console.print("[yellow]No graded attempts yet[/yellow] — explain a concept first.")
+        console.print("[yellow]No graded attempts yet[/yellow], explain a concept first.")
         return
     table = Table(title=f"Your weakest concepts{scope_label(subject)}", border_style="cyan")
     table.add_column("Concept")
@@ -281,7 +281,7 @@ def grade_one(
         return 1
 
     def note_retry(attempt: int, error: GradingError) -> None:
-        console.print(f"[dim]Grading hiccup ({error}) — retrying, attempt {attempt + 1}...[/dim]")
+        console.print(f"[dim]Grading hiccup ({error}), retrying, attempt {attempt + 1}...[/dim]")
 
     with console.status("[cyan]Grading your explanation...[/cyan]"):
         try:
@@ -291,7 +291,7 @@ def grade_one(
         except GradingError as exc:
             console.print(f"[red]Grading failed:[/red] {exc}")
             # Never make the user retype a long explanation because of a
-            # transient failure — hand it back so they can retry or keep it.
+            # transient failure, hand it back so they can retry or keep it.
             saved = save_failed_explanation(concept, explanation)
             if saved:
                 console.print(f"[dim]Your explanation was saved to {saved}[/dim]")
@@ -319,7 +319,7 @@ def announce_rewards(score: float, newly_earned: set[str]) -> None:
         badge = BADGES_BY_KEY.get(key)
         if badge:
             console.print(
-                f"[bold yellow]🏅 Badge unlocked — {badge.name}:[/bold yellow] {badge.description}"
+                f"[bold yellow]🏅 Badge unlocked, {badge.name}:[/bold yellow] {badge.description}"
             )
 
 
@@ -392,7 +392,7 @@ def tutor_repl(concepts: ConceptStore, progress: ProgressStore, history: TutorHi
     remembered = len(history)
     console.print(
         Panel(
-            "[bold]Tutor[/bold] — ask about anything in your notes.\n"
+            "[bold]Tutor[/bold], ask about anything in your notes.\n"
             "[dim]Answers come from your own notes; anything outside them is flagged.\n"
             f"{remembered // 2} earlier exchange(s) remembered. "
             "/forget clears memory, /exit leaves.[/dim]",
@@ -422,7 +422,7 @@ def subjects_by_concept(concepts: ConceptStore) -> dict[str, str | None]:
 
 
 def render_achievements(concepts: ConceptStore, progress: ProgressStore) -> None:
-    """XP, level, streaks, and badges — all derived from your attempt history."""
+    """XP, level, streaks, and badges, all derived from your attempt history."""
     attempts = progress.all_attempts(LOCAL_CHAT_ID)
     mapping = subjects_by_concept(concepts)
 
@@ -483,7 +483,7 @@ def render_history(concepts: ConceptStore, progress: ProgressStore, concept: str
     for i, attempt in enumerate(attempts, start=1):
         score = attempt["score"]
         if previous is None:
-            delta = "[dim]—[/dim]"
+            delta = "[dim]-[/dim]"
         elif score > previous:
             delta = f"[green]+{score - previous:.0f}[/green]"
         elif score < previous:
@@ -536,7 +536,7 @@ def review_session(
     )
 
     for index, concept in enumerate(queue, start=1):
-        console.print(f"\n[dim]— {index} of {len(queue)} —[/dim]")
+        console.print(f"\n[dim]- {index} of {len(queue)} -[/dim]")
         explanation = read_multiline_explanation(concept)
         if explanation is None:
             console.print("[dim]Review ended early.[/dim]")
@@ -659,7 +659,7 @@ def interactive(concepts: ConceptStore, progress: ProgressStore, subject: str | 
             elif command == "/focus":
                 if not argument:
                     focus = None
-                    console.print("[dim]Focus cleared — all subjects.[/dim]")
+                    console.print("[dim]Focus cleared, all subjects.[/dim]")
                 elif concepts.subject_exists(argument):
                     focus = argument.strip().lower()
                     console.print(f"[cyan]Focused on {focus}.[/cyan]")
@@ -697,7 +697,7 @@ def interactive(concepts: ConceptStore, progress: ProgressStore, subject: str | 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="study.py",
-        description="Feynly — explain concepts in your own words and get graded "
+        description="Feynly, explain concepts in your own words and get graded "
                     "against your own notes.",
     )
     parser.add_argument("--subject", "-s", default=None, help="Scope to one subject")

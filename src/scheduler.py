@@ -4,7 +4,7 @@ Two jobs, kept separate:
 
 - `review_state()` runs the SM-2 algorithm: given how well you just explained
   something, when should you see it again?
-- `pick_next()` chooses what to study now — due reviews first, then a weighted
+- `pick_next()` chooses what to study now, due reviews first, then a weighted
   mix of weak / strong / unseen concepts when nothing is overdue.
 
 Pure functions over plain dicts; no I/O. `progress.py` owns persistence.
@@ -135,7 +135,7 @@ def pick_next(
     """Choose the next concept to study.
 
     Returns (concept, reason) where reason is one of "due", "weak", "strong",
-    "new" — or None when there are no concepts at all.
+    "new", or None when there are no concepts at all.
 
     Due reviews always win; spaced repetition is the whole point of tracking
     intervals, so honoring them beats any weighting heuristic. Only when nothing

@@ -3,7 +3,7 @@
 
 Point it at a photo of a whiteboard, a textbook page, a cheat sheet, or
 handwritten notes, and it transcribes them into the `## Concept` markdown the
-concept store expects — using `claude -p`'s vision on your subscription, so it
+concept store expects, using `claude -p`'s vision on your subscription, so it
 costs nothing extra.
 
     python src/import_notes.py photo.jpg
@@ -49,7 +49,7 @@ Rules:
 - Write the material under each heading as clear prose or bullet points.
 - {subject_rule}
 - Transcribe faithfully. Do NOT add facts that are not in the image, and do not
-  correct or embellish the content — these notes will be used as the authority
+  correct or embellish the content, these notes will be used as the authority
   for grading, so invented detail is worse than missing detail.
 - If some text is genuinely unreadable, write `[unclear]` rather than guessing.
 - Ignore page furniture: headers, footers, page numbers, watermarks, URLs.
@@ -108,7 +108,7 @@ def transcribe_image(image: Path, subject: str | None = None) -> str:
             raise ImportError_(f"Got an empty transcription for {image.name}.")
         if "##" not in markdown:
             raise ImportError_(
-                f"No '## Concept' headings found in the transcription of {image.name} — "
+                f"No '## Concept' headings found in the transcription of {image.name}, "
                 "the image may not contain readable notes."
             )
         return markdown
@@ -145,7 +145,7 @@ def main() -> int:
 
     odd = [i for i in args.images if i.suffix.lower() not in SUPPORTED_SUFFIXES]
     for image in odd:
-        print(f"Warning: {image.name} is not a recognised image type — trying anyway.", file=sys.stderr)
+        print(f"Warning: {image.name} is not a recognised image type, trying anyway.", file=sys.stderr)
 
     sections: list[str] = []
     failures = 0
@@ -182,7 +182,7 @@ def main() -> int:
         print(f"({failures} image(s) failed.)")
 
     if not args.load:
-        print("\nRead it over and fix anything the transcription got wrong —")
+        print("\nRead it over and fix anything the transcription got wrong -")
         print("these notes become the answer key every explanation is graded against.")
         print(f"\nThen load it:\n  python src/load_notes.py {destination}")
         return 0
@@ -190,7 +190,7 @@ def main() -> int:
     store = ConceptStore()
     store.merge(parsed)
     store.save()
-    print(f"Loaded into the concept store — now {len(store)} concept(s) total.")
+    print(f"Loaded into the concept store, now {len(store)} concept(s) total.")
     print("Check them with: python src/study.py list")
     return 0
 

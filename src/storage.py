@@ -1,7 +1,7 @@
 """Durable JSON read/write shared by the concept and progress stores.
 
 Two failure modes matter here, because both stores hold data the user cannot
-regenerate — their notes and their entire score history:
+regenerate, their notes and their entire score history:
 
 - A crash (or full disk) partway through a write would otherwise leave a
   truncated file. `write_json` writes to a temp file in the same directory and

@@ -242,5 +242,5 @@ def test_save_failed_explanation_survives_unwritable_location(monkeypatch):
         raise OSError("read-only filesystem")
 
     monkeypatch.setattr(study.Path, "mkdir", deny)
-    # Returns None rather than raising — the grading error is the real story.
+    # Returns None rather than raising, the grading error is the real story.
     assert study.save_failed_explanation("inflation", "text") is None

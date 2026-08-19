@@ -113,7 +113,7 @@ def test_unserializable_payload_preserves_existing_file(tmp_path):
 
 def test_read_unreadable_path_raises(tmp_path):
     # A directory where a file is expected is an environment problem, not
-    # corrupt data — it must surface loudly rather than silently reset.
+    # corrupt data, it must surface loudly rather than silently reset.
     path = tmp_path / "d.json"
     path.mkdir()
     with pytest.raises(CorruptStoreError):

@@ -14,5 +14,5 @@ data/*.corrupt-*
 venv/
 .venv/
 
-# Your own notes stay local — sample_notes.md is the only committed example
+# Your own notes stay local. sample_notes.md is the only committed example
 notes/

@@ -2,7 +2,7 @@
 
 Owns the small per-session state machine (idle <-> awaiting-explanation) and
 formats replies as plain text. Callers feed it (session_id, text) and send the
-returned string back over whichever front end they're using — study.py is the
+returned string back over whichever front end they're using, study.py is the
 terminal one, but nothing here knows or cares about the terminal.
 """
 
@@ -15,14 +15,14 @@ from .grader import GradingError, grade_explanation
 from .progress import ProgressStore
 
 HELP_TEXT = (
-    "Feynly — the Feynman technique as a study bot.\n\n"
+    "Feynly, the Feynman technique as a study bot.\n\n"
     "Send a concept name and I'll ask you to explain it in your own words, "
     "then grade your explanation against your own notes.\n\n"
     "Commands:\n"
-    "/list — see all loaded concepts\n"
-    "/weak — see your lowest-scoring concepts\n"
-    "/cancel — stop the explanation you're mid-way through\n"
-    "/help — this message"
+    "/list      see all loaded concepts\n"
+    "/weak      see your lowest-scoring concepts\n"
+    "/cancel    stop the explanation you're mid-way through\n"
+    "/help      this message"
 )
 
 WELCOME_TEXT = (
@@ -57,7 +57,7 @@ class ConversationManager:
     def handle_message(self, chat_id: str | int, text: str) -> str:
         text = (text or "").strip()
         if not text:
-            return "Send some text — a concept name, or your explanation."
+            return "Send some text: a concept name, or your explanation."
 
         if text.startswith("/"):
             return self._handle_command(chat_id, text)
@@ -82,7 +82,7 @@ class ConversationManager:
             if state.awaiting:
                 cancelled = state.awaiting
                 state.awaiting = None
-                return f"Cancelled. You were explaining \"{cancelled}\" — send a concept name whenever you're ready."
+                return f"Cancelled. You were explaining \"{cancelled}\". Send a concept name whenever you're ready."
             return "Nothing in progress."
         return f"Unknown command: /{command}. Try /help."
 
@@ -96,8 +96,8 @@ class ConversationManager:
     def _weakest_concepts(self, chat_id: str | int) -> str:
         rows = self.progress.weakest(chat_id)
         if not rows:
-            return "No graded attempts yet — explain a concept first."
-        lines = [f"{concept} — avg {avg:.1f}/10 ({attempts} attempt{'s' if attempts != 1 else ''})"
+            return "No graded attempts yet. Explain a concept first."
+        lines = [f"{concept}: avg {avg:.1f}/10 ({attempts} attempt{'s' if attempts != 1 else ''})"
                  for concept, avg, attempts in rows]
         return "Your weakest concepts:\n" + "\n".join(lines)
 
@@ -115,7 +115,7 @@ class ConversationManager:
 
         self._state(chat_id).awaiting = text.strip().lower()
         return (
-            f"\U0001F4DA {text.strip()} — explain it in your own words. "
+            f"\U0001F4DA {text.strip()}: explain it in your own words. "
             "Don't worry about sounding polished, just be complete."
         )
 
@@ -125,19 +125,19 @@ class ConversationManager:
         state.awaiting = None  # clear regardless of outcome so a failed grade doesn't wedge the chat
 
         if notes is None:
-            return f"\"{concept}\" isn't loaded anymore — send /list and pick another concept."
+            return f"\"{concept}\" isn't loaded anymore. Send /list and pick another concept."
 
         try:
             result = self.grade(concept, notes, explanation)
         except GradingError as exc:
-            return f"Grading failed, sorry — try again in a moment.\n({exc})"
+            return f"Grading failed, sorry. Try again in a moment.\n({exc})"
 
         self.progress.record(chat_id, concept, result["score"])
         return self._format_feedback(concept, result)
 
     @staticmethod
     def _format_feedback(concept: str, result: dict) -> str:
-        lines = [f"Score: {result['score']:.0f}/10 — {concept}"]
+        lines = [f"Score: {result['score']:.0f}/10  {concept}"]
         if result["summary"]:
             lines.append(result["summary"])
 

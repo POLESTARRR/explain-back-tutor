@@ -1,4 +1,4 @@
-"""XP, levels, streaks, and badges — all derived, never stored.
+"""XP, levels, streaks, and badges, all derived, never stored.
 
 Everything here is a pure function over the attempt history that `progress.py`
 already keeps. Nothing is persisted separately, which means there is no second
@@ -97,7 +97,7 @@ def _attempt_dates(attempts: list[tuple[str, float, str]]) -> list[date]:
 
 
 def current_streak(attempts: list[tuple[str, float, str]], today: date | None = None) -> int:
-    """Consecutive days studied ending today (or yesterday — today isn't over yet)."""
+    """Consecutive days studied ending today (or yesterday, today isn't over yet)."""
     days = set(_attempt_dates(attempts))
     if not days:
         return 0
@@ -154,7 +154,7 @@ def earned_badge_keys(
     subjects_by_concept: dict[str, str | None] | None = None,
     today: date | None = None,
 ) -> set[str]:
-    """Which badges the history has earned. Pure — recomputed from scratch each time."""
+    """Which badges the history has earned. Pure, recomputed from scratch each time."""
     if not attempts:
         return set()
 

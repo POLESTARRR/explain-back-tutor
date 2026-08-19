@@ -1,8 +1,8 @@
-/* Feynly — design system.
+/* Feynly, design system.
  *
  * "Modern atmospheric": deep slate ground, glass panels, indigo accent, serif
  * headlines against a high-legibility sans. Adapted to a study tool rather than
- * a marketing page — the visual language earns its place by carrying meaning:
+ * a marketing page, the visual language earns its place by carrying meaning:
  * the four feedback categories each own a colour, and the explanation box is
  * treated as the primary command surface because that is literally the one
  * thing the user is here to do.
@@ -23,7 +23,7 @@
   --text-ink: #0f172a;
   --text-ink-dim: #64748b;
 
-  /* Feedback semantics — these carry meaning, not decoration. */
+  /* Feedback semantics, these carry meaning, not decoration. */
   --correct: #34d399;
   --vague: #fbbf24;
   --wrong: #f87171;
@@ -266,7 +266,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .empty { color: var(--text-dim); font-style: italic; }
 
-/* Spinner shown while claude -p grades — this genuinely takes ~30s. */
+/* Spinner shown while claude -p grades, this genuinely takes ~30s. */
 .spinner {
   width: 17px; height: 17px; border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.25);

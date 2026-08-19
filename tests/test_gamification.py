@@ -185,7 +185,7 @@ def test_polymath_needs_three_subjects():
 
 def test_subject_master_requires_all_concepts_in_the_subject():
     mapping = {"a": "chem", "b": "chem"}
-    # Only one of chemistry's two concepts studied — not mastery.
+    # Only one of chemistry's two concepts studied, not mastery.
     assert "subject_master" not in earned_badge_keys([attempt(concept="a", score=10)], mapping)
 
     both = [attempt(concept="a", score=9), attempt(concept="b", score=9)]

@@ -5,7 +5,7 @@
 #   ./scheduling/install_reminder.sh 9 30       # daily at 09:30
 #   ./scheduling/install_reminder.sh --uninstall
 #
-# launchd is built into macOS — no n8n, no cron, no daemon of our own.
+# launchd is built into macOS, no n8n, no cron, no daemon of our own.
 
 set -euo pipefail
 

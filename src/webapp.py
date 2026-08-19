@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Browser front end — the same engine the terminal uses, with a UI.
+"""Browser front end, the same engine the terminal uses, with a UI.
 
     python src/webapp.py                 # http://127.0.0.1:5050
     python src/webapp.py --port 8080
 
 This is a real read/write interface: explain concepts and get graded, upload
 photos of notes, ask the tutor, and see your progress. It adds no study logic of
-its own — every route delegates to the same modules `study.py` calls, so the two
+its own, every route delegates to the same modules `study.py` calls, so the two
 front ends can never disagree about a score or a schedule.
 
 It binds to localhost by default. `--host 0.0.0.0` exposes it to your network,
@@ -53,7 +53,7 @@ app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 
 def stores() -> tuple[ConceptStore, ProgressStore]:
-    """Fresh stores per request — they're small, and this avoids stale reads
+    """Fresh stores per request, they're small, and this avoids stale reads
     when the terminal is used alongside the browser."""
     return ConceptStore(), ProgressStore()
 
@@ -228,7 +228,7 @@ def api_import_save():
 
     parsed = parse_markdown_notes(markdown, default_subject=subject)
     if not parsed:
-        return jsonify({"error": "No '## Concept' headings found — nothing to save."}), 400
+        return jsonify({"error": "No '## Concept' headings found, nothing to save."}), 400
 
     concepts, _ = stores()
     concepts.merge(parsed)
@@ -324,7 +324,7 @@ def build_dashboard_data() -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Feynly — browser interface.")
+    parser = argparse.ArgumentParser(description="Feynly, browser interface.")
     parser.add_argument("--port", "-p", type=int, default=int(os.environ.get("PORT", "5050")),
                         help="Port to serve on (default 5050; 5000 collides with macOS AirPlay)")
     parser.add_argument("--host", default="127.0.0.1",

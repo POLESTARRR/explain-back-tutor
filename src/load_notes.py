@@ -49,7 +49,7 @@ def main() -> int:
         text = notes_file.read_text(encoding="utf-8")
         parsed = parse_markdown_notes(text, default_subject=args.subject)
         if not parsed:
-            print(f"No '## Concept' sections found in {notes_file} — skipped.", file=sys.stderr)
+            print(f"No '## Concept' sections found in {notes_file}, skipped.", file=sys.stderr)
             continue
         per_file.append((notes_file, parsed))
         parsed_all.update(parsed)

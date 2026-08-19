@@ -1,11 +1,11 @@
-"""One interface, two backends — so the same grading logic runs locally and deployed.
+"""One interface over two backends, so the same grading logic runs locally and deployed.
 
 Locally, Feynly grades with `claude -p` on your Claude Code subscription: free,
 private, and nothing leaves your machine except the prompt. That cannot work on a
 public host, which has no Claude Code CLI and must not carry your subscription
 token, so the deployed instance uses Gemini's free tier instead.
 
-Everything above this layer — grading, the tutor, photo import — talks to
+Grading, the tutor and photo import all talk to
 `complete()` and `complete_with_image()` and never knows which backend answered.
 
 Selection: `LLM_PROVIDER` env var ("claude" or "gemini"), defaulting to claude.
@@ -101,7 +101,7 @@ class ClaudeCodeProvider:
 
 
 class GeminiProvider:
-    """Google Gemini. Used for the deployed instance — has a real free tier."""
+    """Google Gemini. Used for the deployed instance, which needs a real free tier."""
 
     name = "gemini"
 

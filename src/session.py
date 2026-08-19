@@ -1,7 +1,7 @@
 """Study-session recording and end-of-session summaries.
 
 Accumulates what happened during one run of the app, then writes it out as a
-markdown log under `data/sessions/` so you can review a session later — including
+markdown log under `data/sessions/` so you can review a session later, including
 the notes-gaps it surfaced, which are edits to make to your source material.
 """
 
@@ -55,7 +55,7 @@ class StudySession:
         return min(self.attempts, key=lambda a: a.score) if self.attempts else None
 
     def all_notes_gaps(self) -> list[tuple[str, str]]:
-        """[(concept, gap)] across the whole session — candidate notes improvements."""
+        """[(concept, gap)] across the whole session, candidate notes improvements."""
         return [
             (a.concept, gap)
             for a in self.attempts
@@ -68,7 +68,7 @@ class StudySession:
         now = now or datetime.now(timezone.utc)
         started = self.started_at.strftime("%Y-%m-%d %H:%M UTC")
         lines = [
-            f"# Study session — {started}",
+            f"# Study session, {started}",
             "",
             f"- Concepts explained: **{self.count}**",
         ]
@@ -85,7 +85,7 @@ class StudySession:
         lines.append("## Attempts")
         for attempt in self.attempts:
             lines.append("")
-            lines.append(f"### {attempt.concept} — {attempt.score:.0f}/10")
+            lines.append(f"### {attempt.concept}, {attempt.score:.0f}/10")
             if attempt.result.get("summary"):
                 lines.append("")
                 lines.append(attempt.result["summary"])
@@ -109,7 +109,7 @@ class StudySession:
                 "",
                 "## Possible gaps in your notes",
                 "",
-                "Things you said that your notes don't actually cover — worth adding "
+                "Things you said that your notes don't actually cover, worth adding "
                 "if they're correct:",
                 "",
             ])

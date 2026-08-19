@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Study reminder — sends a macOS notification about what's due.
+"""Study reminder, sends a macOS notification about what's due.
 
 Designed to be run by launchd (see install_reminder.sh), not by hand, though
 running it manually is a fine way to test it.
 
 Exits 0 when a notification was sent, 0 when nothing is due (silent, by design
-— a reminder that fires when you're caught up trains you to ignore reminders).
+- a reminder that fires when you're caught up trains you to ignore reminders).
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ def build_message(today: date | None = None) -> str | None:
         first = due[0][0]
         if len(due) == 1:
             return f"{first} is due for review."
-        return f"{len(due)} concepts due — start with {first}."
+        return f"{len(due)} concepts due, start with {first}."
 
     # Nothing overdue: only nudge if there's something genuinely new to learn.
     choice = pick_next(concepts.names(), progress.averages(LOCAL_CHAT_ID),

@@ -1,7 +1,7 @@
-"""Grounded tutor chat with memory — the conversational counterpart to grading.
+"""Grounded tutor chat with memory, the conversational counterpart to grading.
 
 Grading is deliberately one-directional: you explain, it judges. This is the
-other half — you ask, it answers. The discipline that makes grading trustworthy
+other half, you ask, it answers. The discipline that makes grading trustworthy
 is kept here too: the tutor answers from YOUR notes, and when it steps outside
 them it must say so explicitly. That keeps it from quietly teaching you things
 your source material doesn't support, which is exactly the failure mode an
@@ -11,7 +11,7 @@ It also sees your score history, so "what am I worst at?" and "why did I keep
 losing marks on inflation?" are answerable.
 
 Conversation history persists to disk, so the tutor remembers across runs.
-`claude -p` is stateless, so the whole exchange is replayed each turn — history
+`claude -p` is stateless, so the whole exchange is replayed each turn, history
 is trimmed to the most recent turns to keep prompts bounded.
 """
 

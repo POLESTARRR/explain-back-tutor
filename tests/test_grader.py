@@ -83,7 +83,7 @@ def test_grade_explanation_missing_claude_binary(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
     with pytest.raises(GradingError, match="claude") as exc:
         grade_explanation("inflation", "notes", "explanation")
-    # A missing binary is permanent — it must not be retried.
+    # A missing binary is permanent, it must not be retried.
     assert exc.value.transient is False
 
 
