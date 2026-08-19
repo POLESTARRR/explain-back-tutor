@@ -25,7 +25,7 @@ def stores(tmp_path, monkeypatch):
     history = TutorHistory(tmp_path / "tutor_history.json")
 
     monkeypatch.setattr(webapp, "stores", lambda: (concepts, progress))
-    monkeypatch.setattr(webapp, "TutorHistory", lambda *a, **k: history)
+    monkeypatch.setattr(webapp, "history_store", lambda *a, **k: history)
     return concepts, progress, history
 
 

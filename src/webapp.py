@@ -17,13 +17,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 import sys
 import tempfile
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -42,20 +43,66 @@ from src.grader import GradingError, grade_explanation  # noqa: E402
 from src.import_notes import ImportError_, transcribe_image  # noqa: E402
 from src.progress import ProgressStore  # noqa: E402
 from src.scheduler import pick_next  # noqa: E402
-from src.tutor import TutorError, TutorHistory  # noqa: E402
+from src import db  # noqa: E402
+from src.stores import (  # noqa: E402
+    LOCAL_USER,
+    concept_store,
+    progress_store,
+    session_key,
+    tutor_history,
+    using_database,
+)
+from src.tutor import TutorError  # noqa: E402
 from src.tutor import answer as tutor_answer  # noqa: E402
 
-SESSION_ID = "local"  # shared with the terminal, so progress is one history
+SESSION_ID = LOCAL_USER  # what the terminal uses; overridden per visitor when deployed
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+USER_COOKIE = "feynly_user"
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Signing key for the session cookie. Locally a fixed value is fine because the
+# cookie only distinguishes one person from themselves; deployed it must be a
+# real secret, or anyone could forge a cookie and read another user's notes.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or (
+    "feynly-local-only" if not using_database() else secrets.token_hex(32)
+)
 
 
-def stores() -> tuple[ConceptStore, ProgressStore]:
-    """Fresh stores per request, they're small, and this avoids stale reads
-    when the terminal is used alongside the browser."""
-    return ConceptStore(), ProgressStore()
+if using_database():
+    # Create tables once at import, so the first visitor does not hit a
+    # missing-table error on a cold container.
+    try:
+        db.init_schema()
+    except Exception as exc:  # noqa: BLE001 - log and continue; routes report it
+        print(f"WARNING: could not initialise the database schema: {exc}", file=sys.stderr)
+
+
+def current_user() -> str:
+    """The visitor's own id, minted on first request and kept in a signed cookie.
+
+    Anonymous by design: no sign-up stands between someone and their first
+    explanation. The id is what every store scopes to, so two visitors never see
+    each other's notes or scores.
+    """
+    if not using_database():
+        return LOCAL_USER
+    if USER_COOKIE not in session:
+        session[USER_COOKIE] = secrets.token_urlsafe(16)
+        session.permanent = True
+    return session[USER_COOKIE]
+
+
+def stores():
+    """Fresh stores per request, scoped to whoever is asking."""
+    user = current_user()
+    return concept_store(user), progress_store(user)
+
+
+def history_store():
+    return tutor_history(current_user())
 
 
 # ------------------------------------------------------------------ pages
@@ -73,7 +120,7 @@ def study_page():
     if requested and concepts.exists(requested):
         concept = requested
     elif names:
-        choice = pick_next(names, progress.averages(SESSION_ID), progress.review_states(SESSION_ID))
+        choice = pick_next(names, progress.averages(session_key(current_user())), progress.review_states(session_key(current_user())))
         if choice:
             concept, raw_reason = choice
             reason = {
@@ -99,7 +146,7 @@ def study_page():
         concepts=names,
         grouped=grouped,
         total_concepts=len(names),
-        due_count=len(progress.due(SESSION_ID)),
+        due_count=len(progress.due(session_key(current_user()))),
     )
 
 
@@ -110,7 +157,7 @@ def dashboard_page():
 
 @app.get("/tutor")
 def tutor_page():
-    history = TutorHistory()
+    history = history_store()
     return render_template("tutor.html", active="tutor", turns=history.recent(40))
 
 
@@ -153,9 +200,9 @@ def api_explain():
         return jsonify({"error": str(exc)}), 502
 
     mapping = {n: concepts.subject_of(n) for n in concepts.names()}
-    before = earned_badge_keys(progress.all_attempts(SESSION_ID), mapping)
-    state = progress.record(SESSION_ID, concept, result["score"])
-    after = earned_badge_keys(progress.all_attempts(SESSION_ID), mapping)
+    before = earned_badge_keys(progress.all_attempts(session_key(current_user())), mapping)
+    state = progress.record(session_key(current_user()), concept, result["score"])
+    after = earned_badge_keys(progress.all_attempts(session_key(current_user())), mapping)
 
     new_badges = [b.name for b in ALL_BADGES if b.key in (after - before)]
     return jsonify({
@@ -176,7 +223,7 @@ def api_tutor():
 
     concepts, progress = stores()
     try:
-        reply = tutor_answer(question, concepts, progress, TutorHistory(), SESSION_ID)
+        reply = tutor_answer(question, concepts, progress, history_store(), session_key(current_user()))
     except TutorError as exc:
         return jsonify({"error": str(exc)}), 502
     return jsonify({"reply": reply})
@@ -184,7 +231,7 @@ def api_tutor():
 
 @app.post("/api/tutor/forget")
 def api_tutor_forget():
-    TutorHistory().clear()
+    history_store().clear()
     return jsonify({"ok": True})
 
 
@@ -260,14 +307,14 @@ def build_dashboard_data() -> dict:
     """Everything the dashboard renders, derived from the same stores as the CLI."""
     concepts, progress = stores()
 
-    averages = progress.averages(SESSION_ID)
-    states = progress.review_states(SESSION_ID)
-    due = progress.due(SESSION_ID)
-    attempts = progress.all_attempts(SESSION_ID)
+    averages = progress.averages(session_key(current_user()))
+    states = progress.review_states(session_key(current_user()))
+    due = progress.due(session_key(current_user()))
+    attempts = progress.all_attempts(session_key(current_user()))
 
     per_concept = []
     for name in concepts.names():
-        history = progress.history(SESSION_ID, name)
+        history = progress.history(session_key(current_user()), name)
         state = states.get(name)
         per_concept.append({
             "concept": name,
@@ -309,7 +356,7 @@ def build_dashboard_data() -> dict:
         "totals": {
             "loaded": len(concepts),
             "studied": len(averages),
-            "attempts": progress.total_attempts(SESSION_ID),
+            "attempts": progress.total_attempts(session_key(current_user())),
             "due": len(due),
             "overall_average": (sum(averages.values()) / len(averages)) if averages else None,
         },
