@@ -33,6 +33,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.concepts import UNCATEGORIZED, ConceptStore  # noqa: E402
 from src.conversation import ConversationManager  # noqa: E402
 from src.grader import GradingError  # noqa: E402
+from src.gamification import (  # noqa: E402
+    BADGES_BY_KEY,
+    attempt_xp,
+    current_streak,
+    earned_badge_keys,
+    earned_badges,
+    level_for_xp,
+    locked_badges,
+    longest_streak,
+    total_xp,
+)
 from src.progress import ProgressStore  # noqa: E402
 from src.scheduler import pick_next  # noqa: E402
 from src.session import StudySession  # noqa: E402
@@ -208,6 +219,15 @@ def render_stats(concepts: ConceptStore, progress: ProgressStore, subject: str |
         overall = sum(averages.values()) / len(averages)
         body.append("Overall average:   ")
         body.append(f"{overall:.1f}/10\n", style=score_style(overall))
+
+    # XP, level and streak are global, so only show them on an unscoped view.
+    if subject is None:
+        all_attempts = progress.all_attempts(LOCAL_CHAT_ID)
+        if all_attempts:
+            info = level_for_xp(total_xp(all_attempts))
+            body.append(f"\nLevel {info.level}", style="bold cyan")
+            body.append(f" · {info.xp} XP · {current_streak(all_attempts)} day streak\n")
+
     console.print(
         Panel(body, title=f"[bold]Your stats{scope_label(subject)}[/bold]", border_style="cyan")
     )
@@ -276,11 +296,29 @@ def grade_one(
             return 1
 
     key = concept.strip().lower()
+    mapping = subjects_by_concept(concepts)
+    before = earned_badge_keys(progress.all_attempts(LOCAL_CHAT_ID), mapping)
+
     state = progress.record(LOCAL_CHAT_ID, key, result["score"])
     render_feedback(concept, result, next_due=state.due)
+
+    after = earned_badge_keys(progress.all_attempts(LOCAL_CHAT_ID), mapping)
+    announce_rewards(result["score"], newly_earned=after - before)
+
     if session is not None:
         session.record(key, result, next_due=state.due)
     return 0
+
+
+def announce_rewards(score: float, newly_earned: set[str]) -> None:
+    """Report XP earned, and celebrate any badge this attempt just unlocked."""
+    console.print(f"[dim]+{attempt_xp(score)} XP[/dim]")
+    for key in sorted(newly_earned):
+        badge = BADGES_BY_KEY.get(key)
+        if badge:
+            console.print(
+                f"[bold yellow]🏅 Badge unlocked — {badge.name}:[/bold yellow] {badge.description}"
+            )
 
 
 def save_failed_explanation(concept: str, explanation: str) -> Path | None:
@@ -331,6 +369,49 @@ def read_multiline_explanation(concept: str) -> str | None:
         lines.append(line)
     text = "\n".join(lines).strip()
     return text or None
+
+
+def subjects_by_concept(concepts: ConceptStore) -> dict[str, str | None]:
+    return {name: concepts.subject_of(name) for name in concepts.names()}
+
+
+def render_achievements(concepts: ConceptStore, progress: ProgressStore) -> None:
+    """XP, level, streaks, and badges — all derived from your attempt history."""
+    attempts = progress.all_attempts(LOCAL_CHAT_ID)
+    mapping = subjects_by_concept(concepts)
+
+    xp = total_xp(attempts)
+    info = level_for_xp(xp)
+    streak = current_streak(attempts)
+    best_streak = longest_streak(attempts)
+
+    filled = int(round(info.progress_fraction * 20))
+    bar = "█" * filled + "░" * (20 - filled)
+
+    body = Text()
+    body.append(f"Level {info.level}", style="bold cyan")
+    body.append(f"   {xp} XP total\n")
+    body.append(f"{bar}  ", style="cyan")
+    body.append(f"{info.xp_into_level}/{info.xp_for_next} to level {info.level + 1}\n", style="dim")
+    body.append(f"\nCurrent streak:  {streak} day(s)\n")
+    body.append(f"Longest streak:  {best_streak} day(s)\n")
+    body.append(f"Explanations:    {len(attempts)}\n")
+    console.print(Panel(body, title="[bold]Your progress[/bold]", border_style="cyan"))
+
+    unlocked = earned_badges(attempts, mapping)
+    locked = locked_badges(attempts, mapping)
+
+    table = Table(
+        title=f"Badges ({len(unlocked)}/{len(unlocked) + len(locked)})", border_style="cyan"
+    )
+    table.add_column("", width=2)
+    table.add_column("Badge")
+    table.add_column("How to earn it", style="dim")
+    for badge in unlocked:
+        table.add_row("[green]✓[/green]", f"[green]{badge.name}[/green]", badge.description)
+    for badge in locked:
+        table.add_row("[dim]·[/dim]", f"[dim]{badge.name}[/dim]", badge.description)
+    console.print(table)
 
 
 def render_history(concepts: ConceptStore, progress: ProgressStore, concept: str) -> int:
@@ -455,6 +536,7 @@ HELP_LINES = (
     "/subjects         subjects and their coverage\n"
     "/focus <subject>  scope to one subject (/focus alone clears it)\n"
     "/history <name>   your attempts at one concept\n"
+    "/progress         XP, level, streaks and badges\n"
     "/weak             your lowest averages\n"
     "/stats            coverage and overall average\n"
     "/exit             finish and save a session log"
@@ -515,6 +597,8 @@ def interactive(concepts: ConceptStore, progress: ProgressStore, subject: str | 
                 render_due(concepts, progress, focus)
             elif command == "/stats":
                 render_stats(concepts, progress, focus)
+            elif command == "/progress":
+                render_achievements(concepts, progress)
             elif command == "/help":
                 console.print(Panel(HELP_LINES, title="Commands", border_style="cyan"))
             elif command == "/focus":
@@ -581,6 +665,7 @@ def build_parser() -> argparse.ArgumentParser:
     weak.add_argument("--limit", "-n", type=int, default=5, help="How many to show (default 5)")
 
     sub.add_parser("subjects", help="List subjects and their coverage")
+    sub.add_parser("progress", help="Show XP, level, streaks and badges")
 
     explain = sub.add_parser("explain", help="Grade an explanation (read from stdin)")
     explain.add_argument("concept", nargs="+", help="Concept name")
@@ -616,6 +701,9 @@ def run(argv: list[str]) -> int:
         return 0
     if command == "subjects":
         render_subjects(concepts, progress)
+        return 0
+    if command == "progress":
+        render_achievements(concepts, progress)
         return 0
     if command == "weak":
         render_weak(concepts, progress, subject, args.limit)

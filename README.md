@@ -22,6 +22,8 @@ themselves are thin.
 - **Picks what to study next** — due reviews first, then a weighted mix of
   weak spots, reinforcement, and unexplored concepts
 - **Organizes by subject**, so you can scope a session to one of them
+- **Tracks XP, levels, streaks and 12 badges**, all derived from your real
+  history — so they apply retroactively and can never drift out of sync
 - **Flags gaps in your notes** — when you say something true that your
   notes don't cover, that's a note to improve, not a mistake
 - **Summarizes each session** to a markdown log you can review later
@@ -133,8 +135,9 @@ choose for you. Type your explanation, finish with a blank line:
 ```
 
 Commands: `/next`, `/review`, `/due`, `/list`, `/subjects`, `/focus`,
-`/history <concept>`, `/weak`, `/stats`, `/help`, `/exit`. `/cancel` backs
-out mid-explanation. On exit you get a session summary and a saved log.
+`/history <concept>`, `/progress`, `/weak`, `/stats`, `/help`, `/exit`.
+`/cancel` backs out mid-explanation. On exit you get a session summary and
+a saved log.
 
 **`/review` is the daily workflow** — it drills straight through every
 concept that's due, one after another, and summarizes at the end.
@@ -158,6 +161,7 @@ python src/study.py review               # drill through everything due
 python src/study.py weak                 # your lowest averages
 python src/study.py stats                # coverage and overall average
 python src/study.py history inflation    # every attempt at one concept
+python src/study.py progress             # XP, level, streaks and badges
 echo "my explanation" | python src/study.py explain inflation
 ```
 
@@ -204,6 +208,23 @@ keep fumbling keeps coming back.
 does it fall back to a weighted mix — 60% weak concepts, 30% reinforcing
 strong ones, 10% something you've never tried.
 
+## XP, levels and badges
+
+`study.py progress` shows your level, XP, streaks, and which of the 12
+badges you've earned — Perfectionist (a 10/10), Comeback (recovering from
+4/10 or below by 4+ points), Deep Diver, Explorer, Scholar, Century, three
+streak badges, Subject Master (8+ across *every* concept in a subject), and
+Polymath.
+
+All of it is **derived from your attempt history, never stored separately**.
+That means there's no second source of truth to corrupt or drift, badges
+apply retroactively to study you did before the feature existed, and the
+terminal and the dashboard can never disagree — there's a test asserting
+exactly that.
+
+XP is `5 + score × 10` per explanation, so a wrong answer still earns
+something for showing up, and a great one earns much more.
+
 ## Your data
 
 Everything lives in `data/` as plain JSON and markdown you can read, edit,
@@ -232,11 +253,12 @@ automatically on load, so older files keep working.
 ```
 pytest
 ```
-225 tests cover the concept store and its subject grouping, spaced-repetition
-scheduling, progress tracking, both store migrations, atomic writes and
-corruption recovery, grader retries and explanation preservation, session
-summaries, the review drill, per-concept history, the CLI's argument parsing
-and interactive loop, subject scoping, the web dashboard, and the reminder —
+277 tests cover the concept store and its subject grouping, spaced-repetition
+scheduling, XP/levels/streaks/badges, progress tracking, both store migrations,
+atomic writes and corruption recovery, grader retries and explanation
+preservation, session summaries, the review drill, per-concept history, the
+CLI's argument parsing and interactive loop, subject scoping, the web
+dashboard, and the reminder —
 all with the `claude -p` call mocked, so the suite runs in well under a
 second with no network use and no draw on your subscription. The grading
 pipeline was verified end-to-end against real `claude -p` calls during
@@ -254,13 +276,14 @@ CI runs the suite on Python 3.10–3.13 on every push.
 | `src/grader.py` | grades an explanation via `claude -p` |
 | `src/concepts.py` | loads/searches your notes, groups them by subject |
 | `src/storage.py` | atomic JSON writes and corruption recovery |
+| `src/gamification.py` | XP, levels, streaks and badges (all derived) |
 | `src/session.py` | session recording and markdown summaries |
 | `src/conversation.py` | transport-agnostic conversation engine |
 | `src/load_notes.py` | notes loader |
 | `src/web.py` | local read-only dashboard |
 | `scheduling/remind.py` | macOS notification about what's due |
 | `scheduling/install_reminder.sh` | installs/removes the launchd agent |
-| `tests/` | 200 tests |
+| `tests/` | 277 tests |
 
 ## What makes this worth building (and not generic)
 

@@ -159,3 +159,66 @@ def test_subject_section_hidden_for_single_subject(stores):
     web.app.config["TESTING"] = True
     body = web.app.test_client().get("/").get_data(as_text=True)
     assert "By subject" not in body
+
+
+# ------------------------------------------------------------ gamification
+
+
+def test_gamification_block_on_empty_history(stores):
+    g = web.build_dashboard_data()["gamification"]
+    assert g["level"] == 1
+    assert g["xp"] == 0
+    assert g["earned_count"] == 0
+    assert g["total_count"] == len(g["badges"])
+
+
+def test_gamification_awards_xp_and_badges(stores):
+    _, progress = stores
+    progress.record(web.LOCAL_CHAT_ID, "inflation", 10, today=TODAY)
+
+    g = web.build_dashboard_data()["gamification"]
+    assert g["xp"] > 0
+    assert g["earned_count"] >= 2  # First Steps + Perfectionist
+
+    names = {b["name"] for b in g["badges"] if b["earned"]}
+    assert "First Steps" in names
+    assert "Perfectionist" in names
+
+
+def test_every_badge_is_listed_earned_or_not(stores):
+    _, progress = stores
+    progress.record(web.LOCAL_CHAT_ID, "inflation", 5, today=TODAY)
+
+    badges = web.build_dashboard_data()["gamification"]["badges"]
+    assert all("earned" in b and "description" in b for b in badges)
+    assert any(not b["earned"] for b in badges)
+
+
+def test_progress_percent_within_bounds(stores):
+    _, progress = stores
+    for _ in range(5):
+        progress.record(web.LOCAL_CHAT_ID, "inflation", 9, today=TODAY)
+
+    g = web.build_dashboard_data()["gamification"]
+    assert 0 <= g["progress_percent"] <= 100
+
+
+def test_dashboard_renders_level_and_badges(client, stores):
+    _, progress = stores
+    progress.record(web.LOCAL_CHAT_ID, "inflation", 8, today=TODAY)
+
+    body = client.get("/").get_data(as_text=True)
+    assert "Level" in body
+    assert "Badges" in body
+    assert "First Steps" in body
+
+
+def test_cli_and_dashboard_agree_on_xp(stores):
+    """Both surfaces derive from the same history, so they must never disagree."""
+    from src.gamification import total_xp
+
+    _, progress = stores
+    progress.record(web.LOCAL_CHAT_ID, "inflation", 7, today=TODAY)
+
+    attempts = progress.all_attempts(web.LOCAL_CHAT_ID)
+    assert web.build_dashboard_data()["gamification"]["xp"] == total_xp(attempts)

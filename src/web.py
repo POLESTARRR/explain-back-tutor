@@ -22,6 +22,14 @@ from flask import Flask, jsonify, render_template_string
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.concepts import UNCATEGORIZED, ConceptStore  # noqa: E402
+from src.gamification import (  # noqa: E402
+    ALL_BADGES,
+    current_streak,
+    earned_badges,
+    level_for_xp,
+    longest_streak,
+    total_xp,
+)
 from src.progress import ProgressStore  # noqa: E402
 from src.study import LOCAL_CHAT_ID  # noqa: E402
 
@@ -75,8 +83,33 @@ def build_dashboard_data() -> dict:
         for day, scores in sorted(by_day.items())
     ]
 
+    mapping = {name: concepts.subject_of(name) for name in concepts.names()}
+    xp = total_xp(attempts)
+    level = level_for_xp(xp)
+    unlocked = earned_badges(attempts, mapping)
+    unlocked_keys = {b.key for b in unlocked}
+
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "gamification": {
+            "xp": xp,
+            "level": level.level,
+            "xp_into_level": level.xp_into_level,
+            "xp_for_next": level.xp_for_next,
+            "progress_percent": round(level.progress_fraction * 100),
+            "current_streak": current_streak(attempts),
+            "longest_streak": longest_streak(attempts),
+            "badges": [
+                {
+                    "name": b.name,
+                    "description": b.description,
+                    "earned": b.key in unlocked_keys,
+                }
+                for b in ALL_BADGES
+            ],
+            "earned_count": len(unlocked),
+            "total_count": len(ALL_BADGES),
+        },
         "totals": {
             "loaded": len(concepts),
             "studied": len(averages),
@@ -145,6 +178,23 @@ TEMPLATE = """
   .bar-fill { background: var(--accent); height: 100%; border-radius: 3px; }
   .pill { background: var(--card); border: 1px solid var(--line); border-radius: 999px;
           padding: .12rem .55rem; font-size: .78rem; color: var(--muted); }
+  .dim { color: var(--muted); }
+  .small { font-size: .8rem; }
+  .level-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+                padding: 1.1rem; margin-top: 1.5rem; }
+  .level-head { display: flex; justify-content: space-between; align-items: flex-start;
+                gap: 1rem; flex-wrap: wrap; margin-bottom: .8rem; }
+  .level-num { font-size: 2.2rem; font-weight: 700; line-height: 1; color: var(--accent); }
+  .level-meta { text-align: right; font-size: .88rem; line-height: 1.7; }
+  .bar-track.wide { max-width: none; }
+  .badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .6rem; }
+  .badge { background: var(--card); border: 1px solid var(--line); border-radius: 9px;
+           padding: .7rem .8rem; display: grid; grid-template-columns: auto 1fr;
+           grid-template-areas: "mark name" "mark desc"; gap: 0 .55rem; align-items: center; }
+  .badge.locked { opacity: .5; }
+  .badge-mark { grid-area: mark; font-size: 1.25rem; }
+  .badge-name { grid-area: name; font-weight: 600; font-size: .9rem; }
+  .badge-desc { grid-area: desc; color: var(--muted); font-size: .76rem; line-height: 1.35; }
 </style>
 </head>
 <body>
@@ -165,6 +215,36 @@ TEMPLATE = """
         {% if data.totals.overall_average %}{{ "%.1f"|format(data.totals.overall_average) }}{% else %}—{% endif %}
       </div>
     </div>
+  </div>
+
+  {% set g = data.gamification %}
+  <div class="level-card">
+    <div class="level-head">
+      <div>
+        <div class="label">Level</div>
+        <div class="level-num">{{ g.level }}</div>
+      </div>
+      <div class="level-meta">
+        <div><strong>{{ g.xp }}</strong> XP total</div>
+        <div>{{ g.current_streak }}-day streak <span class="dim">(best {{ g.longest_streak }})</span></div>
+        <div>{{ g.earned_count }}/{{ g.total_count }} badges</div>
+      </div>
+    </div>
+    <div class="bar-track wide">
+      <div class="bar-fill" style="width: {{ g.progress_percent }}%"></div>
+    </div>
+    <div class="dim small">{{ g.xp_into_level }}/{{ g.xp_for_next }} XP to level {{ g.level + 1 }}</div>
+  </div>
+
+  <h2>Badges</h2>
+  <div class="badges">
+    {% for b in g.badges %}
+    <div class="badge {% if not b.earned %}locked{% endif %}" title="{{ b.description }}">
+      <span class="badge-mark">{% if b.earned %}🏅{% else %}🔒{% endif %}</span>
+      <span class="badge-name">{{ b.name }}</span>
+      <span class="badge-desc">{{ b.description }}</span>
+    </div>
+    {% endfor %}
   </div>
 
   {% if data.subjects|length > 1 %}

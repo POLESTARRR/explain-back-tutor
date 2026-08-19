@@ -24,14 +24,14 @@ def stores(tmp_path, monkeypatch):
 
 
 def test_no_message_when_no_concepts_loaded(stores):
-    assert remind.build_message() is None
+    assert remind.build_message(TODAY) is None
 
 
 def test_nudges_about_a_new_concept(stores):
     concepts, _ = stores
     concepts.add("inflation", "notes")
     concepts.save()
-    message = remind.build_message()
+    message = remind.build_message(TODAY)
     assert message is not None
     assert "inflation" in message
 
@@ -42,7 +42,7 @@ def test_nudges_about_a_single_due_concept(stores):
     concepts.save()
     progress.record(remind.LOCAL_CHAT_ID, "inflation", 8, today=date(2026, 8, 1))
 
-    message = remind.build_message()
+    message = remind.build_message(TODAY)
     assert "inflation" in message
     assert "due for review" in message
 
@@ -54,7 +54,7 @@ def test_nudges_with_count_when_several_due(stores):
         progress.record(remind.LOCAL_CHAT_ID, name, 8, today=date(2026, 8, 1))
     concepts.save()
 
-    message = remind.build_message()
+    message = remind.build_message(TODAY)
     assert "2 concepts due" in message
 
 
@@ -65,7 +65,7 @@ def test_silent_when_caught_up(stores):
     concepts.save()
     progress.record(remind.LOCAL_CHAT_ID, "inflation", 9, today=TODAY)
 
-    assert remind.build_message() is None
+    assert remind.build_message(TODAY) is None
 
 
 def test_main_returns_zero_when_silent(stores, capsys):

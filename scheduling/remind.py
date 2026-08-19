@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -34,15 +35,19 @@ def notify(title: str, message: str) -> bool:
         return False
 
 
-def build_message() -> str | None:
-    """What to nudge about, or None if there's nothing worth interrupting for."""
+def build_message(today: date | None = None) -> str | None:
+    """What to nudge about, or None if there's nothing worth interrupting for.
+
+    `today` is injectable so scheduling behavior can be tested against a fixed
+    date rather than whatever day the suite happens to run on.
+    """
     concepts = ConceptStore()
     progress = ProgressStore()
 
     if not len(concepts):
         return None
 
-    due = progress.due(LOCAL_CHAT_ID)
+    due = progress.due(LOCAL_CHAT_ID, today=today)
     if due:
         first = due[0][0]
         if len(due) == 1:
