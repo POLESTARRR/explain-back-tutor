@@ -306,3 +306,49 @@ def test_dashboard_reports_due(client, stores):
     progress.record(webapp.SESSION_ID, "inflation", 8, today=date(2026, 1, 1))
     due = client.get("/api/data").get_json()["due"]
     assert any(row["concept"] == "inflation" for row in due)
+
+
+# --------------------------------------------------- newly added material
+
+
+def test_saved_notes_are_returned_by_name(client, stores):
+    """The page needs the names so it can offer to study what was just added."""
+    response = client.post("/api/import/save",
+                           json={"markdown": "## Contract\n\nAn agreement.", "subject": "Law"})
+    assert response.status_code == 200
+    assert response.get_json()["names"] == ["contract"]
+
+
+def test_saved_names_are_normalised(client, stores):
+    data = client.post("/api/import/save",
+                       json={"markdown": "## Indian Contract Act, 1872\n\nnotes"}).get_json()
+    assert data["names"] == ["indian contract act, 1872"]
+
+
+def test_study_dropdown_groups_by_subject(client, stores):
+    body = client.get("/").get_data(as_text=True)
+    assert "<optgroup" in body
+    assert 'label="economics"' in body
+    assert 'label="biology"' in body
+
+
+def test_newly_added_concept_appears_in_the_dropdown(client, stores):
+    """A new concept loses the due-queue race, so it must still be selectable."""
+    client.post("/api/import/save", json={"markdown": "## Contract\n\nnotes", "subject": "Law"})
+    body = client.get("/").get_data(as_text=True)
+    assert 'label="law"' in body
+    assert ">contract<" in body
+
+
+def test_requested_concept_beats_the_due_queue(client, stores):
+    """Following the 'study this' link must open that concept, not the due one."""
+    from datetime import date
+
+    _, progress, _ = stores
+    progress.record(webapp.SESSION_ID, "inflation", 8, today=date(2026, 1, 1))  # overdue
+    client.post("/api/import/save", json={"markdown": "## Contract\n\nnotes", "subject": "Law"})
+
+    body = client.get("/?concept=contract").get_data(as_text=True)
+    assert 'id="conceptName"' in body
+    # The requested concept is the one presented, not the overdue one.
+    assert body.split('id="conceptName"')[1].split("</h2>")[0].endswith("contract")

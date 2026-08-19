@@ -83,6 +83,13 @@ def study_page():
                 "new": "not tried yet",
             }.get(raw_reason, raw_reason)
 
+    # Grouped by subject: a flat list of every concept is unscannable once a few
+    # subjects are loaded, which is exactly when newly added material gets lost.
+    grouped = [
+        (subject, concepts.names(subject))
+        for subject in concepts.subjects()
+    ]
+
     return render_template(
         "study.html",
         active="study",
@@ -90,6 +97,7 @@ def study_page():
         subject=concepts.subject_of(concept) if concept else None,
         reason=reason,
         concepts=names,
+        grouped=grouped,
         total_concepts=len(names),
         due_count=len(progress.due(SESSION_ID)),
     )
@@ -233,7 +241,11 @@ def api_import_save():
     concepts, _ = stores()
     concepts.merge(parsed)
     concepts.save()
-    return jsonify({"added": len(parsed), "total": len(concepts)})
+    # Hand back the names so the page can offer to study what was just added.
+    # Otherwise new material is invisible behind the due queue, which always
+    # wins, and the user is left wondering whether the save worked at all.
+    added = sorted(name.strip().lower() for name in parsed)
+    return jsonify({"added": len(parsed), "total": len(concepts), "names": added})
 
 
 @app.get("/api/data")

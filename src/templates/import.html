@@ -136,10 +136,13 @@ async function save() {
     el("saveStatus").innerHTML = `<div class="alert alert-bad" style="margin-top:1rem">${escapeHtml(data.error)}</div>`;
     el("saveBtn").disabled = false;
   } else {
+    const first = (data.names || [])[0];
+    const link = first ? "/?concept=" + encodeURIComponent(first) : "/";
     el("saveStatus").innerHTML =
-      `<div class="alert alert-ok" style="margin-top:1rem">Saved ${data.added} concept(s).
-       <a href="/" style="text-decoration:underline">Start studying →</a></div>`;
-    setTimeout(() => location.reload(), 1800);
+      `<div class="alert alert-ok" style="margin-top:1rem">
+         Saved ${data.added} concept(s).
+         <a href="${link}" style="text-decoration:underline">Study ${first ? escapeHtml(first) : "now"} →</a>
+       </div>`;
   }
 }
 </script>
