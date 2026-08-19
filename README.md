@@ -15,6 +15,8 @@ themselves are thin.
 
 ## What it does
 
+- **Imports notes from photos** — snap a whiteboard, textbook page, or
+  handwritten sheet and it transcribes them into study-ready markdown
 - **Grades your explanations** against your own notes, separating "vague"
   from "wrong" from "not in the notes at all"
 - **Schedules reviews** with spaced repetition (SM-2), so concepts come
@@ -100,6 +102,34 @@ and it will tell you so. Feed it one-line definitions and it will correctly
 mark most of a good answer as "not covered by your notes" — which is the
 signal to go write better notes. Rich, explanatory notes produce genuinely
 useful grading.
+
+### Notes from photos
+
+Most people's notes are on paper, a whiteboard, or a textbook page — not in
+markdown. Photograph them instead:
+
+```
+python src/import_notes.py photo.jpg
+python src/import_notes.py page1.jpg page2.jpg --subject chemistry
+python src/import_notes.py whiteboard.png --load     # skip the review step
+```
+
+It reads the image with `claude -p`'s vision (your subscription — no API
+key, no OCR service) and writes study-ready markdown to `notes/`. Handles
+png, jpg, webp, heic and pdf. Several pages of one subject merge into a
+single file.
+
+Most terminals let you **drag a photo into the window to paste its path**,
+so you rarely have to type one.
+
+By default it writes the file and *stops* rather than loading it, because
+the transcription becomes the answer key every future explanation is graded
+against — a misread word would quietly become a permanent grading error.
+Read it over, fix anything wrong, then `load_notes.py` it. Pass `--load` to
+skip that if you're confident.
+
+It also refuses output with no `## Concept` headings, so photographing
+something that isn't notes fails loudly instead of loading garbage.
 
 ### 3. Study
 ```
@@ -284,7 +314,7 @@ automatically on load, so older files keep working.
 ```
 pytest
 ```
-322 tests cover the concept store and its subject grouping, spaced-repetition
+341 tests cover the concept store and its subject grouping, spaced-repetition
 scheduling, XP/levels/streaks/badges, progress tracking, both store migrations,
 atomic writes and corruption recovery, grader retries and explanation
 preservation, session summaries, the review drill, per-concept history, the
@@ -312,10 +342,11 @@ CI runs the suite on Python 3.10–3.13 on every push.
 | `src/session.py` | session recording and markdown summaries |
 | `src/conversation.py` | transport-agnostic conversation engine |
 | `src/load_notes.py` | notes loader |
+| `src/import_notes.py` | turns photos of notes into markdown via claude vision |
 | `src/web.py` | local read-only dashboard |
 | `scheduling/remind.py` | macOS notification about what's due |
 | `scheduling/install_reminder.sh` | installs/removes the launchd agent |
-| `tests/` | 322 tests |
+| `tests/` | 341 tests |
 
 ## What makes this worth building (and not generic)
 
