@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Tutor — Feynly{% endblock %}
+{% block title %}Tutor · Feynly{% endblock %}
 
 {% block content %}
 <div class="wrap wrap-narrow">
   <span class="eyebrow">● Grounded in your notes</span>
   <h1>Ask about anything you're studying.</h1>
-  <p class="dim">It reads your notes and your scores. When it steps outside your notes,
-    it says so — so you always know what came from your material and what didn't.</p>
+  <p class="dim">It knows your notes and how you've been scoring. If it answers with
+    anything that isn't in your notes, it tells you.</p>
 
   <div id="transcript" style="margin-top: 1.8rem;">
     {% for turn in turns %}
       <div class="msg {% if turn.role == 'student' %}msg-you{% else %}msg-tutor{% endif %}">{{ turn.text }}</div>
     {% else %}
-      <div class="glass card empty">Nothing asked yet. Try "what am I weakest at?"</div>
+      <div class="glass card empty">Nothing yet. Try asking what you're weakest at.</div>
     {% endfor %}
   </div>
 
@@ -22,7 +22,7 @@
       <textarea id="question" style="min-height: 96px"
         placeholder="e.g. why do I keep losing marks on photosynthesis?"></textarea>
       <div class="composer-bar">
-        <span class="composer-hint">⌘↵ to send · memory persists across sessions</span>
+        <span class="composer-hint">Hit ⌘↵ to send. It remembers between visits.</span>
         <button class="send" id="askBtn" type="submit" aria-label="Ask">↑</button>
       </div>
     </div>

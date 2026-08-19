@@ -80,7 +80,7 @@ def test_study_page_empty_store(tmp_path, monkeypatch):
     webapp.app.config["TESTING"] = True
 
     body = webapp.app.test_client().get("/").get_data(as_text=True)
-    assert "No notes to study" in body
+    assert "Nothing to study yet" in body
 
 
 def test_notes_page_lists_concepts(client):

@@ -20,4 +20,10 @@ study = "src.study:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # google-genai trips Python 3.14's typing deprecations on import. Third-party
+    # and harmless; scoped narrowly so our own warnings still fail the suite.
+    "ignore:.*_UnionGenericAlias.*:DeprecationWarning",
+    "ignore:.*typing.ByteString.*:DeprecationWarning",
+]

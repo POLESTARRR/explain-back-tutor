@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Study — Feynly{% endblock %}
+{% block title %}Study · Feynly{% endblock %}
 
 {% block content %}
 <div class="wrap wrap-narrow">
 
   {% if not total_concepts %}
-    <span class="eyebrow">Nothing loaded yet</span>
-    <h1>No notes to study.</h1>
-    <p class="dim">Add some material first — you can photograph a page and it'll be
-      transcribed for you.</p>
+    <span class="eyebrow">Nothing here yet</span>
+    <h1>Nothing to study yet.</h1>
+    <p class="dim">Add some notes first. You can photograph a page and we'll type it up
+      for you.</p>
     <p><a class="btn btn-primary" href="{{ url_for('import_page') }}">Add notes</a></p>
 
   {% else %}
@@ -16,7 +16,7 @@
       {% if due_count %}● {{ due_count }} due for review{% else %}● {{ total_concepts }} concepts loaded{% endif %}
     </span>
     <h1>Explain it in your own words.</h1>
-    <p class="dim cursor" id="tagline">You don't understand it until you can teach it</p>
+    <p class="dim cursor" id="tagline">If you can't teach it, you don't know it yet</p>
 
     <div class="glass card" style="margin-top: 1.6rem;">
       <div class="spread">
@@ -40,7 +40,7 @@
       </div>
 
       <p class="small dim" style="margin: 1rem 0 0;">
-        Your notes stay hidden on purpose — showing them would defeat the point.
+        We keep your notes hidden. Reading them first would defeat the point.
       </p>
     </div>
 
@@ -48,9 +48,9 @@
       <div class="composer-glow"></div>
       <div class="composer-inner">
         <textarea id="explanation" name="explanation"
-          placeholder="Explain it as if teaching someone who's never heard of it. Don't worry about sounding polished — be complete."></textarea>
+          placeholder="Teach it to someone who's never heard of it. Don't worry about sounding polished. Just don't leave anything out."></textarea>
         <div class="composer-bar">
-          <span class="composer-hint">Grading runs on your machine and takes ~30s · ⌘↵ to submit</span>
+          <span class="composer-hint">Takes about 30 seconds. Hit ⌘↵ to send.</span>
           <button class="send" id="sendBtn" type="submit" title="Submit for grading" aria-label="Submit">↑</button>
         </div>
       </div>
@@ -134,7 +134,7 @@ if (form) {
     el("result").innerHTML = "";
     el("status").innerHTML =
       `<div class="glass card row" style="margin-top:1rem"><span class="spinner"></span>
-       <span class="dim">Grading against your notes…</span></div>`;
+       <span class="dim">Reading your answer</span></div>`;
 
     try {
       const res = await fetch("/api/explain", {
@@ -152,7 +152,7 @@ if (form) {
       }
     } catch (err) {
       el("status").innerHTML =
-        `<div class="alert alert-bad" style="margin-top:1rem">Couldn't reach the grader: ${escapeHtml(err.message)}</div>`;
+        `<div class="alert alert-bad" style="margin-top:1rem">Couldn't reach the grader. ${escapeHtml(err.message)}</div>`;
     } finally {
       el("sendBtn").disabled = false;
     }

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Progress — Feynly{% endblock %}
+{% block title %}Progress · Feynly{% endblock %}
 
 {% macro grade(v) %}{% if v >= 8 %}score-good{% elif v >= 5 %}score-mid{% else %}score-bad{% endif %}{% endmacro %}
 
 {% block content %}
 <div class="wrap">
   <span class="eyebrow">● Updated {{ data.generated_at }}</span>
-  <h1>Where you actually stand.</h1>
+  <h1>How you're actually doing.</h1>
 
   {% set g = data.gamification %}
 
