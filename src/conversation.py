@@ -15,7 +15,7 @@ from .grader import GradingError, grade_explanation
 from .progress import ProgressStore
 
 HELP_TEXT = (
-    "Explain-Back Tutor — the Feynman technique as a study bot.\n\n"
+    "Feynly — the Feynman technique as a study bot.\n\n"
     "Send a concept name and I'll ask you to explain it in your own words, "
     "then grade your explanation against your own notes.\n\n"
     "Commands:\n"
@@ -26,7 +26,7 @@ HELP_TEXT = (
 )
 
 WELCOME_TEXT = (
-    "Explain-back tutor is running. Send a concept name to get started, "
+    "Feynly is running. Send a concept name to get started, "
     "or /list to see what's loaded."
 )
 

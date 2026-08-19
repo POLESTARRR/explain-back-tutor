@@ -1,5 +1,5 @@
 [project]
-name = "explain-back-tutor"
+name = "feynly"
 version = "0.3.0"
 description = "Feynman-technique study system: explain concepts in your own words and get graded against your own notes"
 readme = "README.md"

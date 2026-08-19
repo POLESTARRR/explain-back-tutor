@@ -324,7 +324,7 @@ def build_dashboard_data() -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Explain-Back Tutor — browser interface.")
+    parser = argparse.ArgumentParser(description="Feynly — browser interface.")
     parser.add_argument("--port", "-p", type=int, default=int(os.environ.get("PORT", "5050")),
                         help="Port to serve on (default 5050; 5000 collides with macOS AirPlay)")
     parser.add_argument("--host", default="127.0.0.1",
@@ -338,7 +338,7 @@ def main() -> int:
             "  and anyone who reaches it can spend your Claude subscription.\n"
         )
 
-    print(f"Explain-Back Tutor: http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
+    print(f"Feynly: http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
     try:
         app.run(host=args.host, port=args.port, debug=False)
     except OSError as exc:

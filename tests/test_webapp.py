@@ -55,7 +55,7 @@ def fake_grade(score=8.0, **extra):
 def test_pages_render(client, path):
     response = client.get(path)
     assert response.status_code == 200
-    assert "explain-back" in response.get_data(as_text=True)
+    assert "feynly" in response.get_data(as_text=True)
 
 
 def test_study_page_picks_a_concept(client):

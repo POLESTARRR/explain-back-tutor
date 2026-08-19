@@ -1,4 +1,4 @@
-# Explain-Back Tutor
+# Feynly
 
 A terminal study system built on the Feynman technique: you don't understand
 something until you can explain it simply in your own words. You pick a

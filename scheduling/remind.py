@@ -22,7 +22,7 @@ from src.progress import ProgressStore  # noqa: E402
 from src.scheduler import pick_next  # noqa: E402
 from src.study import LOCAL_CHAT_ID  # noqa: E402
 
-TITLE = "Explain-Back Tutor"
+TITLE = "Feynly"
 
 
 def notify(title: str, message: str) -> bool:

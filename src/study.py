@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explain-Back Tutor — terminal study tool.
+"""Feynly — terminal study tool.
 
 Interactive:
     python src/study.py
@@ -594,7 +594,7 @@ HELP_LINES = (
 def interactive(concepts: ConceptStore, progress: ProgressStore, subject: str | None = None) -> int:
     console.print(
         Panel(
-            "[bold]Explain-Back Tutor[/bold]\n"
+            "[bold]Feynly[/bold]\n"
             "Type a concept name to be graded on it, or /next to be given one.\n"
             "[dim]/next  /due  /list  /subjects  /focus  /weak  /stats  /help  /exit[/dim]",
             border_style="cyan",
@@ -697,7 +697,7 @@ def interactive(concepts: ConceptStore, progress: ProgressStore, subject: str | 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="study.py",
-        description="Explain-Back Tutor — explain concepts in your own words and get graded "
+        description="Feynly — explain concepts in your own words and get graded "
                     "against your own notes.",
     )
     parser.add_argument("--subject", "-s", default=None, help="Scope to one subject")
